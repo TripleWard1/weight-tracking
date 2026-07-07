@@ -7,6 +7,7 @@ import EntrySheet, { EntryInput } from "./EntrySheet";
 import SettingsSheet from "./SettingsSheet";
 import PhaseSheet from "./PhaseSheet";
 import WorkoutSheet from "./WorkoutSheet";
+import RoutineSheet from "./RoutineSheet";
 import TrainTab from "./TrainTab";
 import {
   isFirebaseConfigured,
@@ -24,6 +25,10 @@ import {
   addWorkout,
   updateWorkout,
   removeWorkout,
+  watchRoutines,
+  addRoutine,
+  updateRoutine,
+  removeRoutine,
 } from "@/lib/firebase";
 import {
   toDisplay,
@@ -55,6 +60,9 @@ import {
 } from "@/lib/stats";
 import {
   Workout,
+  Routine,
+  Draft,
+  draftFromRoutine,
   deriveActivityLevel,
   avgWorkoutsPerWeek,
   exerciseNames,
@@ -98,6 +106,10 @@ export default function App() {
   const [phaseOpen, setPhaseOpen] = useState(false);
   const [workoutOpen, setWorkoutOpen] = useState(false);
   const [editingWorkout, setEditingWorkout] = useState<Workout | null>(null);
+  const [workoutPrefill, setWorkoutPrefill] = useState<Draft | null>(null);
+  const [routines, setRoutines] = useState<Routine[]>([]);
+  const [routineOpen, setRoutineOpen] = useState(false);
+  const [editingRoutine, setEditingRoutine] = useState<Routine | null>(null);
   const [theme, setTheme] = useState<Theme>("dark");
   const [toast, setToast] = useState("");
 
@@ -137,16 +149,19 @@ export default function App() {
     if (!user) {
       setEntries([]);
       setWorkouts([]);
+      setRoutines([]);
       setSettings(null);
       return;
     }
     const unsubE = watchEntries(user.uid, setEntries);
     const unsubS = watchSettings(user.uid, setSettings);
     const unsubW = watchWorkouts(user.uid, setWorkouts);
+    const unsubR = watchRoutines(user.uid, setRoutines);
     return () => {
       unsubE && unsubE();
       unsubS && unsubS();
       unsubW && unsubW();
+      unsubR && unsubR();
     };
   }, [user]);
 
@@ -322,6 +337,46 @@ export default function App() {
     } catch {
       flash("Could not delete workout");
     }
+  }
+
+  async function handleSaveRoutine(r: Omit<Routine, "id" | "createdAt">) {
+    if (!user) return;
+    try {
+      if (editingRoutine && editingRoutine.id) {
+        await updateRoutine(user.uid, editingRoutine.id, r);
+        flash("Routine updated");
+      } else {
+        await addRoutine(user.uid, r);
+        flash("Routine created");
+      }
+      setRoutineOpen(false);
+      setEditingRoutine(null);
+    } catch {
+      flash("Could not save routine");
+    }
+  }
+
+  async function handleDeleteRoutine(id: string) {
+    if (!user) return;
+    try {
+      await removeRoutine(user.uid, id);
+      setRoutineOpen(false);
+      setEditingRoutine(null);
+      flash("Routine deleted");
+    } catch {
+      flash("Could not delete routine");
+    }
+  }
+
+  function startRoutine(r: Routine) {
+    setEditingWorkout(null);
+    setWorkoutPrefill(draftFromRoutine(r, workouts, unit));
+    setWorkoutOpen(true);
+  }
+  function startEmptyWorkout() {
+    setEditingWorkout(null);
+    setWorkoutPrefill(null);
+    setWorkoutOpen(true);
   }
 
   function exportCsv() {
@@ -529,14 +584,22 @@ export default function App() {
         {tab === "train" && (
           <TrainTab
             workouts={workouts}
+            routines={routines}
             unit={unit}
             onEdit={(w) => {
               setEditingWorkout(w);
+              setWorkoutPrefill(null);
               setWorkoutOpen(true);
             }}
-            onLog={() => {
-              setEditingWorkout(null);
-              setWorkoutOpen(true);
+            onLog={startEmptyWorkout}
+            onStartRoutine={startRoutine}
+            onEditRoutine={(r) => {
+              setEditingRoutine(r);
+              setRoutineOpen(true);
+            }}
+            onNewRoutine={() => {
+              setEditingRoutine(null);
+              setRoutineOpen(true);
             }}
           />
         )}
@@ -546,8 +609,7 @@ export default function App() {
         className="fab"
         onClick={() => {
           if (tab === "train") {
-            setEditingWorkout(null);
-            setWorkoutOpen(true);
+            startEmptyWorkout();
           } else {
             setEditing(null);
             setEntryOpen(true);
@@ -590,13 +652,28 @@ export default function App() {
         open={workoutOpen}
         unit={unit}
         editing={editingWorkout}
+        prefill={workoutPrefill}
+        history={workouts}
         knownExercises={knownExercises}
         onClose={() => {
           setWorkoutOpen(false);
           setEditingWorkout(null);
+          setWorkoutPrefill(null);
         }}
         onSave={handleSaveWorkout}
         onDelete={handleDeleteWorkout}
+      />
+      <RoutineSheet
+        open={routineOpen}
+        unit={unit}
+        editing={editingRoutine}
+        knownExercises={knownExercises}
+        onClose={() => {
+          setRoutineOpen(false);
+          setEditingRoutine(null);
+        }}
+        onSave={handleSaveRoutine}
+        onDelete={handleDeleteRoutine}
       />
 
       <footer className="footer">

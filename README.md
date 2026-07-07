@@ -10,7 +10,7 @@ number, see the honest trend. Built with **Next.js 14 (App Router)**, **Firebase
 - **Trend-first charts** - noisy daily readings plus a 7-day moving average (the line that actually tells the truth), with a goal reference line.
 - **Training phases** - run a cut, bulk, or maintain phase with a target weekly pace. Mercury compares your real trend to the target and tells you if you're on track, ahead, or behind, and draws your target pace on the chart.
 - **Energy / TDEE (two methods)** - with a complete profile (height, sex, birth year, activity level) Mercury shows an instant maintenance estimate via the Mifflin-St Jeor formula. Once you've logged calories alongside ~5 weigh-ins, it switches automatically to an *adaptive* value measured from your own intake vs. weight trend, and shows both side by side. Logging calories is optional - the formula alone gives you a number from day one.
-- **Training log** - full workout logging (exercises → sets of reps × weight) with a Train tab: weekly consistency, per-exercise load progression (estimated 1RM), volume by muscle group, and a session history. Your training frequency can auto-set your TDEE activity level.
+- **Training log & routines** - build reusable routines (planned exercises, sets and target reps), then start one at the gym: each set shows what you lifted last time so you can match or beat it (progressive overload). Sessions save to a history with weekly consistency, per-exercise 1RM progression, and volume by muscle group. Training frequency can auto-set your TDEE activity level.
 - **Goal projection** - least-squares trend estimates when you'll hit your target.
 - **Insights** - weekly rate, total change, min/max, BMI, logging streak.
 - **kg / lb** everywhere, converted at the edge (data always stored in kg).
@@ -96,6 +96,7 @@ The recursive `{document=**}` match covers the `entries` and `workouts` subcolle
 users/{uid}                      { settings: { name, unit, heightCm, goalKg, phases, sex, birthYear, activityLevel, autoActivity } }
 users/{uid}/entries/{entryId}    { kg, ts, bodyFat, calories, note, createdAt }
 users/{uid}/workouts/{workoutId} { ts, title, note, durationMin, exercises[], createdAt }
+users/{uid}/routines/{routineId} { name, note, exercises[], createdAt }
 ```
 
 Weights are stored in **kilograms**; the UI converts to your chosen unit for display

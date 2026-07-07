@@ -2,6 +2,7 @@
 // Strength-training log: workouts -> exercises -> sets. Weights stored in KG.
 
 import type { ActivityLevel } from "./stats";
+import { toDisplay, round1, type Unit } from "./stats";
 
 export type MuscleGroup =
   | "chest"
@@ -254,4 +255,98 @@ export function workoutDayKeys(workouts: Workout[]): Set<string> {
     );
   }
   return s;
+}
+
+/* ---------------- Routines (planned workouts / templates) ---------------- */
+
+// Planned set: reps as a string so ranges like "8-12" are allowed; weight optional.
+export interface RoutineSet {
+  reps: string;
+  kg: number | null;
+}
+export interface RoutineExercise {
+  name: string;
+  muscle: MuscleGroup;
+  sets: RoutineSet[];
+}
+export interface Routine {
+  id?: string;
+  name: string;
+  note?: string;
+  exercises: RoutineExercise[];
+  createdAt?: unknown;
+}
+
+// Draft structures used by the logger UI (display-unit strings while editing).
+export interface DraftSet {
+  reps: string;
+  weight: string;
+}
+export interface DraftExercise {
+  name: string;
+  muscle: MuscleGroup;
+  sets: DraftSet[];
+}
+export interface Draft {
+  title: string;
+  exercises: DraftExercise[];
+}
+
+export interface Performance {
+  ts: number;
+  sets: SetEntry[];
+}
+
+// Most recent performance of a named exercise (optionally strictly before a time).
+export function lastPerformance(
+  workouts: Workout[],
+  name: string,
+  beforeTs?: number
+): Performance | null {
+  const target = name.trim().toLowerCase();
+  if (!target) return null;
+  const sorted = [...workouts].sort((a, b) => b.ts - a.ts); // newest first
+  for (const w of sorted) {
+    if (beforeTs != null && w.ts >= beforeTs) continue;
+    for (const ex of w.exercises) {
+      if (ex.name.trim().toLowerCase() === target) {
+        return { ts: w.ts, sets: ex.sets };
+      }
+    }
+  }
+  return null;
+}
+
+// "60×8 · 60×8 · 55×6" in the display unit (weights rounded).
+export function performanceLabel(perf: Performance | null, unit: Unit): string | null {
+  if (!perf || !perf.sets.length) return null;
+  return perf.sets
+    .map((s) => `${round1(toDisplay(s.kg, unit)) ?? 0}×${s.reps}`)
+    .join(" · ");
+}
+
+// Build a logging draft from a routine, carrying over last time's weights so you
+// can match or beat them (progressive overload).
+export function draftFromRoutine(
+  routine: Routine,
+  workouts: Workout[],
+  unit: Unit
+): Draft {
+  const exercises: DraftExercise[] = routine.exercises.map((rx) => {
+    const last = lastPerformance(workouts, rx.name);
+    const sets: DraftSet[] = rx.sets.map((ps, i) => {
+      const lastSet = last?.sets[i];
+      const weightKg = lastSet?.kg ?? ps.kg ?? null;
+      return {
+        reps: lastSet?.reps != null ? String(lastSet.reps) : "",
+        weight: weightKg != null ? String(round1(toDisplay(weightKg, unit)) ?? "") : "",
+      };
+    });
+    return { name: rx.name, muscle: rx.muscle, sets };
+  });
+  return { title: routine.name, exercises };
+}
+
+export function routineSetCount(r: Routine): number {
+  return r.exercises.reduce((s, ex) => s + ex.sets.length, 0);
 }

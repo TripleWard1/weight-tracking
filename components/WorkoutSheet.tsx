@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { toDisplay, toKg, round1, Unit } from "@/lib/stats";
+import { toKg, toDisplay, round1, Unit } from "@/lib/stats";
 import {
   Workout,
   Exercise,
@@ -9,17 +9,12 @@ import {
   MUSCLE_LABELS,
   MUSCLE_ORDER,
   guessMuscle,
+  DraftExercise,
+  DraftSet,
+  Draft,
+  lastPerformance,
+  performanceLabel,
 } from "@/lib/workouts";
-
-interface EditSet {
-  reps: string;
-  weight: string;
-}
-interface EditExercise {
-  name: string;
-  muscle: MuscleGroup;
-  sets: EditSet[];
-}
 
 function toLocalInputValue(ts: number): string {
   const d = new Date(ts);
@@ -27,10 +22,16 @@ function toLocalInputValue(ts: number): string {
   return new Date(d.getTime() - off * 60000).toISOString().slice(0, 16);
 }
 
+function blankExercise(): DraftExercise {
+  return { name: "", muscle: "other", sets: [{ reps: "", weight: "" }] };
+}
+
 interface WorkoutSheetProps {
   open: boolean;
   unit: Unit;
   editing: Workout | null;
+  prefill: Draft | null;
+  history: Workout[];
   knownExercises: string[];
   onClose: () => void;
   onSave: (workout: Omit<Workout, "id" | "createdAt">) => void;
@@ -41,6 +42,8 @@ export default function WorkoutSheet({
   open,
   unit,
   editing,
+  prefill,
+  history,
   knownExercises,
   onClose,
   onSave,
@@ -50,7 +53,7 @@ export default function WorkoutSheet({
   const [when, setWhen] = useState(toLocalInputValue(Date.now()));
   const [duration, setDuration] = useState("");
   const [note, setNote] = useState("");
-  const [exercises, setExercises] = useState<EditExercise[]>([]);
+  const [exercises, setExercises] = useState<DraftExercise[]>([]);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -71,6 +74,14 @@ export default function WorkoutSheet({
           })),
         }))
       );
+    } else if (prefill) {
+      setTitle(prefill.title || "");
+      setWhen(toLocalInputValue(Date.now()));
+      setDuration("");
+      setNote("");
+      setExercises(
+        prefill.exercises.length ? prefill.exercises.map(cloneDraft) : [blankExercise()]
+      );
     } else {
       setTitle("");
       setWhen(toLocalInputValue(Date.now()));
@@ -78,15 +89,15 @@ export default function WorkoutSheet({
       setNote("");
       setExercises([blankExercise()]);
     }
-  }, [open, editing, unit]);
+  }, [open, editing, prefill, unit]);
 
   if (!open) return null;
 
-  function blankExercise(): EditExercise {
-    return { name: "", muscle: "other", sets: [{ reps: "", weight: "" }] };
+  function cloneDraft(ex: DraftExercise): DraftExercise {
+    return { name: ex.name, muscle: ex.muscle, sets: ex.sets.map((s) => ({ ...s })) };
   }
 
-  function patchExercise(i: number, patch: Partial<EditExercise>) {
+  function patchExercise(i: number, patch: Partial<DraftExercise>) {
     setExercises((prev) => prev.map((ex, idx) => (idx === i ? { ...ex, ...patch } : ex)));
   }
   function onName(i: number, name: string) {
@@ -109,7 +120,10 @@ export default function WorkoutSheet({
       prev.map((ex, idx) => {
         if (idx !== i) return ex;
         const last = ex.sets[ex.sets.length - 1];
-        return { ...ex, sets: [...ex.sets, { reps: last?.reps || "", weight: last?.weight || "" }] };
+        return {
+          ...ex,
+          sets: [...ex.sets, { reps: last?.reps || "", weight: last?.weight || "" }],
+        };
       })
     );
   }
@@ -120,14 +134,11 @@ export default function WorkoutSheet({
       )
     );
   }
-  function updateSet(i: number, j: number, field: keyof EditSet, value: string) {
+  function updateSet(i: number, j: number, field: keyof DraftSet, value: string) {
     setExercises((prev) =>
       prev.map((ex, idx) =>
         idx === i
-          ? {
-              ...ex,
-              sets: ex.sets.map((s, k) => (k === j ? { ...s, [field]: value } : s)),
-            }
+          ? { ...ex, sets: ex.sets.map((s, k) => (k === j ? { ...s, [field]: value } : s)) }
           : ex
       )
     );
@@ -153,7 +164,7 @@ export default function WorkoutSheet({
       built.push({ name, muscle: ex.muscle, sets });
     }
     if (!built.length) {
-      setError("Add at least one exercise with a set (reps required).");
+      setError("Add at least one exercise with a completed set (reps required).");
       return;
     }
     const dur = duration === "" ? null : parseInt(duration, 10);
@@ -166,6 +177,8 @@ export default function WorkoutSheet({
     });
   }
 
+  const beforeTs = editing?.ts;
+
   return (
     <div className="sheet-overlay" onClick={onClose}>
       <div
@@ -177,7 +190,7 @@ export default function WorkoutSheet({
       >
         <div className="sheet-grip" />
         <div className="sheet-head">
-          <h2>{editing ? "Edit workout" : "Log workout"}</h2>
+          <h2>{editing ? "Edit workout" : prefill ? prefill.title || "Workout" : "Log workout"}</h2>
           <button className="icon-btn" onClick={onClose} aria-label="Close">
             ✕
           </button>
@@ -223,81 +236,106 @@ export default function WorkoutSheet({
             ))}
           </datalist>
 
-          {exercises.map((ex, i) => (
-            <div className="ex-block" key={i}>
-              <div className="ex-head">
-                <input
-                  className="ex-name"
-                  type="text"
-                  list="known-exercises"
-                  placeholder="Exercise name"
-                  value={ex.name}
-                  onChange={(e) => onName(i, e.target.value)}
-                />
-                <button
-                  className="icon-btn sm"
-                  onClick={() => removeExercise(i)}
-                  aria-label="Remove exercise"
-                >
-                  ✕
+          {exercises.map((ex, i) => {
+            const last = ex.name.trim()
+              ? lastPerformance(history, ex.name, beforeTs)
+              : null;
+            const lastLabel = performanceLabel(last, unit);
+            return (
+              <div className="ex-block" key={i}>
+                <div className="ex-head">
+                  <input
+                    className="ex-name"
+                    type="text"
+                    list="known-exercises"
+                    placeholder="Exercise name"
+                    value={ex.name}
+                    onChange={(e) => onName(i, e.target.value)}
+                  />
+                  <button
+                    className="icon-btn sm"
+                    onClick={() => removeExercise(i)}
+                    aria-label="Remove exercise"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className="ex-row2">
+                  <select
+                    className="select sm"
+                    value={ex.muscle}
+                    onChange={(e) =>
+                      patchExercise(i, { muscle: e.target.value as MuscleGroup })
+                    }
+                  >
+                    {MUSCLE_ORDER.map((m) => (
+                      <option key={m} value={m}>
+                        {MUSCLE_LABELS[m]}
+                      </option>
+                    ))}
+                  </select>
+                  {lastLabel && (
+                    <span className="last-perf" title="Your last session of this exercise">
+                      Last: {lastLabel}
+                    </span>
+                  )}
+                </div>
+
+                <div className="set-rows">
+                  <div className="set-row set-head">
+                    <span>Set</span>
+                    <span>Prev</span>
+                    <span>Reps</span>
+                    <span>Weight ({unit})</span>
+                    <span />
+                  </div>
+                  {ex.sets.map((s, j) => {
+                    const prev = last?.sets[j];
+                    const prevLabel = prev
+                      ? `${round1(toDisplay(prev.kg, unit)) ?? 0}×${prev.reps}`
+                      : "-";
+                    return (
+                      <div className="set-row" key={j}>
+                        <span className="set-idx mono">{j + 1}</span>
+                        <span className="set-prev mono">{prevLabel}</span>
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          placeholder={prev ? String(prev.reps) : "0"}
+                          value={s.reps}
+                          onChange={(e) => updateSet(i, j, "reps", e.target.value)}
+                          className="mono"
+                        />
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          step="0.5"
+                          placeholder={
+                            prev ? String(round1(toDisplay(prev.kg, unit)) ?? 0) : "0"
+                          }
+                          value={s.weight}
+                          onChange={(e) => updateSet(i, j, "weight", e.target.value)}
+                          className="mono"
+                        />
+                        <button
+                          className="icon-btn sm"
+                          onClick={() => removeSet(i, j)}
+                          aria-label="Remove set"
+                          disabled={ex.sets.length <= 1}
+                        >
+                          –
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+                <button className="add-set" onClick={() => addSet(i)}>
+                  ＋ Add set
                 </button>
               </div>
-
-              <select
-                className="select sm"
-                value={ex.muscle}
-                onChange={(e) => patchExercise(i, { muscle: e.target.value as MuscleGroup })}
-              >
-                {MUSCLE_ORDER.map((m) => (
-                  <option key={m} value={m}>
-                    {MUSCLE_LABELS[m]}
-                  </option>
-                ))}
-              </select>
-
-              <div className="set-rows">
-                <div className="set-row set-head">
-                  <span>Set</span>
-                  <span>Reps</span>
-                  <span>Weight ({unit})</span>
-                  <span />
-                </div>
-                {ex.sets.map((s, j) => (
-                  <div className="set-row" key={j}>
-                    <span className="set-idx mono">{j + 1}</span>
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      placeholder="0"
-                      value={s.reps}
-                      onChange={(e) => updateSet(i, j, "reps", e.target.value)}
-                      className="mono"
-                    />
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      step="0.5"
-                      placeholder="0"
-                      value={s.weight}
-                      onChange={(e) => updateSet(i, j, "weight", e.target.value)}
-                      className="mono"
-                    />
-                    <button
-                      className="icon-btn sm"
-                      onClick={() => removeSet(i, j)}
-                      aria-label="Remove set"
-                      disabled={ex.sets.length <= 1}
-                    >
-                      –
-                    </button>
-                  </div>
-                ))}
-              </div>
-              <button className="add-set" onClick={() => addSet(i)}>
-                ＋ Add set
-              </button>
-            </div>
-          ))}
+            );
+          })}
 
           <button className="btn ghost block" onClick={addExercise}>
             ＋ Add exercise
@@ -327,7 +365,7 @@ export default function WorkoutSheet({
             </button>
           )}
           <button className="btn primary" onClick={submit}>
-            {editing ? "Save workout" : "Save workout"}
+            Save workout
           </button>
         </div>
       </div>

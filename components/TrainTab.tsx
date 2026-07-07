@@ -16,6 +16,8 @@ import {
 import { toDisplay, round1, Unit } from "@/lib/stats";
 import {
   Workout,
+  Routine,
+  routineSetCount,
   workoutVolume,
   workoutSets,
   workoutsPerWeek,
@@ -30,29 +32,81 @@ import {
 
 interface TrainProps {
   workouts: Workout[];
+  routines: Routine[];
   unit: Unit;
   onEdit: (w: Workout) => void;
   onLog: () => void;
+  onStartRoutine: (r: Routine) => void;
+  onEditRoutine: (r: Routine) => void;
+  onNewRoutine: () => void;
 }
 
 function vol(kgVolume: number, unit: Unit): number {
   return Math.round(toDisplay(kgVolume, unit) ?? 0);
 }
 
-export default function TrainTab({ workouts, unit, onEdit, onLog }: TrainProps) {
+export default function TrainTab({
+  workouts,
+  routines,
+  unit,
+  onEdit,
+  onLog,
+  onStartRoutine,
+  onEditRoutine,
+  onNewRoutine,
+}: TrainProps) {
   const names = useMemo(() => exerciseNames(workouts), [workouts]);
   const [exercise, setExercise] = useState<string>("");
   const chosen = exercise || names[0] || "";
 
+  const routinesSection = (
+    <section className="card">
+      <div className="chart-head">
+        <span className="eyebrow">My routines</span>
+        <button className="linkish" onClick={onNewRoutine}>
+          ＋ New
+        </button>
+      </div>
+      {routines.length ? (
+        <div className="routine-list">
+          {routines.map((r) => (
+            <div className="routine-item" key={r.id}>
+              <button className="routine-main" onClick={() => onStartRoutine(r)}>
+                <span className="routine-name">{r.name}</span>
+                <span className="routine-sub">
+                  {r.exercises.length} exercises · {routineSetCount(r)} sets
+                </span>
+              </button>
+              <div className="routine-actions">
+                <button className="btn primary sm-btn" onClick={() => onStartRoutine(r)}>
+                  Start
+                </button>
+                <button className="icon-btn sm" onClick={() => onEditRoutine(r)} aria-label="Edit routine">
+                  ✎
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="muted-note">
+          Create a routine to plan your exercises, sets and target reps - then start it
+          at the gym and just fill in what you lift.
+        </p>
+      )}
+      <button className="btn ghost block" style={{ marginTop: 10 }} onClick={onLog}>
+        Start empty workout
+      </button>
+    </section>
+  );
+
   if (!workouts.length) {
     return (
-      <div className="empty card">
-        <p>No workouts logged yet.</p>
-        <span>Tap “Log workout” to record your first session.</span>
-        <div style={{ marginTop: 16 }}>
-          <button className="btn primary" onClick={onLog}>
-            ＋ Log workout
-          </button>
+      <div className="stack">
+        {routinesSection}
+        <div className="empty card">
+          <p>No workouts logged yet.</p>
+          <span>Start a routine above, or log an empty session.</span>
         </div>
       </div>
     );
@@ -89,6 +143,7 @@ export default function TrainTab({ workouts, unit, onEdit, onLog }: TrainProps) 
 
   return (
     <div className="stack">
+      {routinesSection}
       <section className="card">
         <span className="eyebrow">This week</span>
         <div className="train-summary">

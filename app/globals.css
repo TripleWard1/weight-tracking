@@ -1280,3 +1280,79 @@ strong.accent,
   color: var(--text-2);
   line-height: 1.4;
 }
+
+/* ============================ Routines ============================ */
+.routine-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+.routine-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+.routine-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: transparent;
+  border: 0;
+  text-align: left;
+  min-width: 0;
+}
+.routine-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+.routine-sub {
+  font-size: 12px;
+  color: var(--muted);
+}
+.routine-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+.btn.sm-btn {
+  padding: 7px 14px;
+  font-size: 13px;
+  border-radius: 9px;
+}
+
+/* Workout sheet: muscle + "last time" row */
+.ex-row2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.last-perf {
+  font-size: 11.5px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Set rows: workout logger has a Prev column (5 cols); routine planner has 4. */
+.set-row {
+  grid-template-columns: 30px 52px 1fr 1fr 32px;
+}
+.set-row.plan {
+  grid-template-columns: 30px 1fr 1fr 32px;
+}
+.set-prev {
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+}

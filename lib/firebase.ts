@@ -27,7 +27,7 @@ import {
   Firestore,
 } from "firebase/firestore";
 import type { Entry, Settings } from "./stats";
-import type { Workout } from "./workouts";
+import type { Workout, Routine } from "./workouts";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -178,4 +178,41 @@ export async function updateWorkout(uid: string, id: string, patch: Partial<Work
 export async function removeWorkout(uid: string, id: string) {
   ensure();
   return deleteDoc(doc(getDb(), "users", uid, "workouts", id));
+}
+
+// ---- Routines (templates) ----
+// users/{uid}/routines/{routineId} -> { name, note, exercises[] }
+
+function routinesCol(uid: string) {
+  return collection(getDb(), "users", uid, "routines");
+}
+
+export function watchRoutines(
+  uid: string,
+  callback: (routines: Routine[]) => void
+): () => void {
+  if (!ensure() || !uid) {
+    callback([]);
+    return () => {};
+  }
+  const q = query(routinesCol(uid), orderBy("createdAt", "asc"));
+  return onSnapshot(q, (snap) => {
+    const rows = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Routine, "id">) }));
+    callback(rows);
+  });
+}
+
+export async function addRoutine(uid: string, routine: Omit<Routine, "id" | "createdAt">) {
+  ensure();
+  return addDoc(routinesCol(uid), { ...routine, createdAt: serverTimestamp() });
+}
+
+export async function updateRoutine(uid: string, id: string, patch: Partial<Routine>) {
+  ensure();
+  return updateDoc(doc(getDb(), "users", uid, "routines", id), patch);
+}
+
+export async function removeRoutine(uid: string, id: string) {
+  ensure();
+  return deleteDoc(doc(getDb(), "users", uid, "routines", id));
 }
