@@ -16,6 +16,7 @@ export type MuscleGroup =
 export interface SetEntry {
   reps: number;
   kg: number;
+  done?: boolean;
 }
 
 export interface Exercise {
@@ -281,6 +282,7 @@ export interface Routine {
 export interface DraftSet {
   reps: string;
   weight: string;
+  done: boolean;
 }
 export interface DraftExercise {
   name: string;
@@ -340,6 +342,7 @@ export function draftFromRoutine(
       return {
         reps: lastSet?.reps != null ? String(lastSet.reps) : "",
         weight: weightKg != null ? String(round1(toDisplay(weightKg, unit)) ?? "") : "",
+        done: false,
       };
     });
     return { name: rx.name, muscle: rx.muscle, sets };

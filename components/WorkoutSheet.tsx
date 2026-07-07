@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toKg, toDisplay, round1, Unit } from "@/lib/stats";
 import {
   Workout,
@@ -23,7 +23,7 @@ function toLocalInputValue(ts: number): string {
 }
 
 function blankExercise(): DraftExercise {
-  return { name: "", muscle: "other", sets: [{ reps: "", weight: "" }] };
+  return { name: "", muscle: "other", sets: [{ reps: "", weight: "", done: false }] };
 }
 
 interface WorkoutSheetProps {
@@ -56,9 +56,23 @@ export default function WorkoutSheet({
   const [exercises, setExercises] = useState<DraftExercise[]>([]);
   const [error, setError] = useState("");
 
+  // Refs for auto-scrolling to the current exercise as sets get completed.
+  const exRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const prevCurrent = useRef<number>(-1);
+  useEffect(() => {
+    const ci = exercises.findIndex(
+      (ex) => ex.name.trim() && ex.sets.some((s) => !s.done)
+    );
+    if (ci >= 0 && ci > prevCurrent.current && exRefs.current[ci]) {
+      exRefs.current[ci]?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    prevCurrent.current = ci;
+  }, [exercises]);
+
   useEffect(() => {
     if (!open) return;
     setError("");
+    prevCurrent.current = -1;
     if (editing) {
       setTitle(editing.title || "");
       setWhen(toLocalInputValue(editing.ts));
@@ -71,6 +85,7 @@ export default function WorkoutSheet({
           sets: ex.sets.map((s) => ({
             reps: String(s.reps),
             weight: String(round1(toDisplay(s.kg, unit)) ?? ""),
+            done: s.done ?? false,
           })),
         }))
       );
@@ -95,6 +110,16 @@ export default function WorkoutSheet({
 
   function cloneDraft(ex: DraftExercise): DraftExercise {
     return { name: ex.name, muscle: ex.muscle, sets: ex.sets.map((s) => ({ ...s })) };
+  }
+
+  function toggleDone(i: number, j: number) {
+    setExercises((prev) =>
+      prev.map((ex, idx) =>
+        idx === i
+          ? { ...ex, sets: ex.sets.map((s, k) => (k === j ? { ...s, done: !s.done } : s)) }
+          : ex
+      )
+    );
   }
 
   function patchExercise(i: number, patch: Partial<DraftExercise>) {
@@ -122,7 +147,10 @@ export default function WorkoutSheet({
         const last = ex.sets[ex.sets.length - 1];
         return {
           ...ex,
-          sets: [...ex.sets, { reps: last?.reps || "", weight: last?.weight || "" }],
+          sets: [
+            ...ex.sets,
+            { reps: last?.reps || "", weight: last?.weight || "", done: false },
+          ],
         };
       })
     );
@@ -158,6 +186,7 @@ export default function WorkoutSheet({
         .map((s) => ({
           reps: parseInt(s.reps, 10),
           kg: toKg(parseFloat(s.weight.replace(",", ".")), unit) ?? 0,
+          done: s.done,
         }))
         .filter((s) => !Number.isNaN(s.reps) && s.reps > 0);
       if (!sets.length) continue;
@@ -179,6 +208,20 @@ export default function WorkoutSheet({
 
   const beforeTs = editing?.ts;
 
+  // Session progress: completed sets vs total, and which exercise is "current".
+  let totalSets = 0;
+  let doneSets = 0;
+  exercises.forEach((ex) => {
+    ex.sets.forEach((s) => {
+      totalSets++;
+      if (s.done) doneSets++;
+    });
+  });
+  const currentIndex = exercises.findIndex(
+    (ex) => ex.name.trim() && ex.sets.some((s) => !s.done)
+  );
+  const allDone = totalSets > 0 && doneSets === totalSets;
+
   return (
     <div className="sheet-overlay" onClick={onClose}>
       <div
@@ -197,6 +240,20 @@ export default function WorkoutSheet({
         </div>
 
         <div className="sheet-scroll">
+          {totalSets > 0 && (
+            <div className={"session-progress" + (allDone ? " complete" : "")}>
+              <div className="session-progress-bar">
+                <div
+                  className="session-progress-fill"
+                  style={{ width: `${(doneSets / totalSets) * 100}%` }}
+                />
+              </div>
+              <span className="session-progress-text mono">
+                {allDone ? "All sets done 💪" : `${doneSets} / ${totalSets} sets`}
+              </span>
+            </div>
+          )}
+
           <div className="field-row">
             <label className="field">
               <span>Title (optional)</span>
@@ -241,8 +298,19 @@ export default function WorkoutSheet({
               ? lastPerformance(history, ex.name, beforeTs)
               : null;
             const lastLabel = performanceLabel(last, unit);
+            const exDone = ex.sets.length > 0 && ex.sets.every((s) => s.done);
             return (
-              <div className="ex-block" key={i}>
+              <div
+                className={
+                  "ex-block" +
+                  (i === currentIndex ? " current" : "") +
+                  (exDone ? " ex-done" : "")
+                }
+                key={i}
+                ref={(el) => {
+                  exRefs.current[i] = el;
+                }}
+              >
                 <div className="ex-head">
                   <input
                     className="ex-name"
@@ -252,6 +320,7 @@ export default function WorkoutSheet({
                     value={ex.name}
                     onChange={(e) => onName(i, e.target.value)}
                   />
+                  {i === currentIndex && <span className="now-badge">Now</span>}
                   <button
                     className="icon-btn sm"
                     onClick={() => removeExercise(i)}
@@ -283,11 +352,12 @@ export default function WorkoutSheet({
                 </div>
 
                 <div className="set-rows">
-                  <div className="set-row set-head">
+                  <div className="set-row work set-head">
                     <span>Set</span>
                     <span>Prev</span>
                     <span>Reps</span>
                     <span>Weight ({unit})</span>
+                    <span>✓</span>
                     <span />
                   </div>
                   {ex.sets.map((s, j) => {
@@ -296,7 +366,7 @@ export default function WorkoutSheet({
                       ? `${round1(toDisplay(prev.kg, unit)) ?? 0}×${prev.reps}`
                       : "-";
                     return (
-                      <div className="set-row" key={j}>
+                      <div className={"set-row work" + (s.done ? " done" : "")} key={j}>
                         <span className="set-idx mono">{j + 1}</span>
                         <span className="set-prev mono">{prevLabel}</span>
                         <input
@@ -318,6 +388,14 @@ export default function WorkoutSheet({
                           onChange={(e) => updateSet(i, j, "weight", e.target.value)}
                           className="mono"
                         />
+                        <button
+                          className={"set-check" + (s.done ? " on" : "")}
+                          onClick={() => toggleDone(i, j)}
+                          aria-label={s.done ? "Mark set not done" : "Mark set done"}
+                          aria-pressed={s.done}
+                        >
+                          {s.done ? "✓" : ""}
+                        </button>
                         <button
                           className="icon-btn sm"
                           onClick={() => removeSet(i, j)}
@@ -364,8 +442,15 @@ export default function WorkoutSheet({
               Delete
             </button>
           )}
-          <button className="btn primary" onClick={submit}>
-            Save workout
+          <button
+            className={"btn primary" + (allDone && !editing ? " pulse" : "")}
+            onClick={submit}
+          >
+            {editing
+              ? "Save workout"
+              : allDone
+              ? "Finish workout ✓"
+              : "Save workout"}
           </button>
         </div>
       </div>

@@ -1356,3 +1356,99 @@ strong.accent,
   color: var(--muted);
   font-size: 12px;
 }
+
+/* ============================ Active session ============================ */
+.session-progress {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 2px;
+  margin-bottom: 6px;
+  background: var(--surface);
+}
+.session-progress-bar {
+  flex: 1;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+.session-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent-2), var(--accent));
+  transition: width 0.25s ease;
+}
+.session-progress-text {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.session-progress.complete .session-progress-text {
+  color: var(--accent);
+}
+
+/* Set-row grids: workout (with check) = 6 cols, routine planner = 4 cols */
+.set-row.work {
+  grid-template-columns: 26px 48px 1fr 1fr 34px 30px;
+}
+.set-row.plan {
+  grid-template-columns: 30px 1fr 1fr 32px;
+}
+.set-row.done input {
+  opacity: 0.55;
+}
+.set-row.done .set-idx {
+  color: var(--accent);
+}
+
+/* The done checkbox */
+.set-check {
+  width: 30px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  border-radius: 8px;
+  color: var(--accent-ink);
+  font-size: 15px;
+  font-weight: 700;
+  transition: background 0.12s, border-color 0.12s;
+}
+.set-check.on {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+/* Current / done exercise states */
+.ex-block.current {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+.ex-block.ex-done {
+  opacity: 0.72;
+}
+.now-badge {
+  flex: 0 0 auto;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent-ink);
+  background: var(--accent);
+  padding: 3px 8px;
+  border-radius: 999px;
+}
+
+/* Finish-workout pulse when all sets are done */
+.btn.primary.pulse {
+  animation: finishPulse 1.6s ease-in-out infinite;
+}
+@keyframes finishPulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent); }
+  50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 0%, transparent); }
+}
