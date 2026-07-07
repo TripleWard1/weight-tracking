@@ -24,12 +24,26 @@ export interface Phase {
   note?: string;
 }
 
+export type Sex = "male" | "female";
+
+// Activity multipliers for Mifflin-St Jeor (standard TDEE bands).
+export type ActivityLevel =
+  | "sedentary"
+  | "light"
+  | "moderate"
+  | "active"
+  | "very_active";
+
 export interface Settings {
   name?: string;
   unit?: Unit;
   heightCm?: number | null;
   goalKg?: number | null;
   phases?: Phase[];
+  sex?: Sex | null;
+  birthYear?: number | null;
+  activityLevel?: ActivityLevel | null;
+  autoActivity?: boolean; // derive activity level from logged workouts
 }
 
 export interface Summary {
@@ -49,12 +63,16 @@ export interface Projection {
   date: Date | null;
 }
 
+export type TDEEMethod = "adaptive" | "formula" | "none";
+
 export interface TDEE {
-  tdee: number | null; // estimated maintenance kcal/day
+  value: number | null; // the maintenance kcal/day to use (adaptive preferred, else formula)
+  method: TDEEMethod;
+  adaptive: number | null; // measured from intake vs weight trend
+  formula: number | null; // Mifflin-St Jeor prediction
   avgIntake: number | null; // mean logged intake over the window
   ratePerWeekKg: number; // weight trend used
-  daysOfIntake: number; // how many days had calories logged
-  enoughData: boolean;
+  daysOfIntake: number; // days with calories logged
 }
 
 export type PhaseHealth = "on-track" | "faster" | "slower" | "wrong-way" | "no-data";
@@ -312,7 +330,7 @@ export function phaseStatus(
   // Maintenance: any direction near zero is fine.
   if (phase.type === "maintain") {
     if (Math.abs(actual) <= 0.15) {
-      return { health: "on-track", actualRatePerWeek: actual, targetRatePerWeek: target, message: "Holding steady — right where a maintenance phase should be." };
+      return { health: "on-track", actualRatePerWeek: actual, targetRatePerWeek: target, message: "Holding steady - right where a maintenance phase should be." };
     }
     return {
       health: actual > 0 ? "faster" : "slower",
@@ -341,7 +359,7 @@ export function phaseStatus(
 
   const diff = actual - target; // negative = losing faster than target (for cut)
   if (Math.abs(diff) <= TOL) {
-    return { health: "on-track", actualRatePerWeek: actual, targetRatePerWeek: target, message: "On track — your trend matches this phase's target pace." };
+    return { health: "on-track", actualRatePerWeek: actual, targetRatePerWeek: target, message: "On track - your trend matches this phase's target pace." };
   }
 
   // For a cut, more-negative-than-target = faster; for a bulk, more-positive = faster.
@@ -352,8 +370,8 @@ export function phaseStatus(
     targetRatePerWeek: target,
     message: faster
       ? cutting
-        ? "Losing faster than planned. Fine short-term, but very fast loss can cost muscle — consider easing up."
-        : "Gaining faster than planned — more of this may be fat. Consider easing intake down."
+        ? "Losing faster than planned. Fine short-term, but very fast loss can cost muscle - consider easing up."
+        : "Gaining faster than planned - more of this may be fat. Consider easing intake down."
       : cutting
         ? "Slower than your target. A small further cut in intake would nudge it along."
         : "Slower than your target. A small bump in intake would nudge it along.",
@@ -362,36 +380,84 @@ export function phaseStatus(
 
 /* ---------------- TDEE ---------------- */
 
-// Estimate maintenance calories from the weight trend + logged intake over a window.
-// TDEE = average intake - daily energy imbalance implied by the weight trend.
-export function estimateTDEE(entries: Entry[], windowDays = 14): TDEE {
+export const ACTIVITY_FACTORS: Record<ActivityLevel, number> = {
+  sedentary: 1.2,
+  light: 1.375,
+  moderate: 1.55,
+  active: 1.725,
+  very_active: 1.9,
+};
+
+export const ACTIVITY_LABELS: Record<ActivityLevel, string> = {
+  sedentary: "Sedentary - little exercise",
+  light: "Light - 1–3 days/week",
+  moderate: "Moderate - 3–5 days/week",
+  active: "Active - 6–7 days/week",
+  very_active: "Very active - hard training / physical job",
+};
+
+// Mifflin-St Jeor basal metabolic rate. Returns kcal/day or null if inputs missing.
+export function bmrMifflin(
+  kg: number | null,
+  heightCm: number | null | undefined,
+  age: number | null,
+  sex: Sex | null | undefined
+): number | null {
+  if (!kg || !heightCm || age == null || !sex) return null;
+  const base = 10 * kg + 6.25 * heightCm - 5 * age;
+  return sex === "male" ? base + 5 : base - 161;
+}
+
+// Predicted maintenance (formula) from profile. Null if profile incomplete.
+export function formulaTDEE(currentKg: number | null, settings: Settings | null): number | null {
+  if (!settings || currentKg == null) return null;
+  const age =
+    settings.birthYear != null ? new Date().getFullYear() - settings.birthYear : null;
+  const bmr = bmrMifflin(currentKg, settings.heightCm, age, settings.sex);
+  const activity = settings.activityLevel
+    ? ACTIVITY_FACTORS[settings.activityLevel]
+    : null;
+  if (bmr == null || activity == null) return null;
+  return bmr * activity;
+}
+
+// Combined TDEE: measured from data when there's enough intake logged (preferred),
+// otherwise the Mifflin-St Jeor formula prediction from the profile.
+export function estimateTDEE(
+  entries: Entry[],
+  settings: Settings | null = null,
+  windowDays = 14
+): TDEE {
   const series = dailySeries(entries);
   const latestTs = series.length ? series[series.length - 1].ts : Date.now();
   const cutoff = latestTs - windowDays * 86400000;
+  const currentKg = series.length ? series[series.length - 1].kg : null;
 
   const withCals = entries.filter(
     (e) => e.ts >= cutoff && e.calories != null && !Number.isNaN(e.calories as number)
   );
   const daysOfIntake = new Set(withCals.map((e) => dayKey(e.ts))).size;
-
   const ratePerWeekKg = trendPerWeek(entries, windowDays);
 
-  // Need a reasonable amount of intake data and a usable trend.
-  const enoughData = daysOfIntake >= 5;
-  if (!enoughData) {
-    return { tdee: null, avgIntake: null, ratePerWeekKg, daysOfIntake, enoughData: false };
+  const formula = formulaTDEE(currentKg, settings);
+
+  let adaptive: number | null = null;
+  let avgIntake: number | null = null;
+  if (daysOfIntake >= 5) {
+    avgIntake =
+      withCals.reduce((s, e) => s + (e.calories as number), 0) / withCals.length;
+    const dailyImbalance = (ratePerWeekKg / 7) * KCAL_PER_KG; // <0 when losing
+    adaptive = avgIntake - dailyImbalance;
   }
 
-  const avgIntake =
-    withCals.reduce((s, e) => s + (e.calories as number), 0) / withCals.length;
+  const value = adaptive ?? formula ?? null;
+  const method: TDEEMethod =
+    adaptive != null ? "adaptive" : formula != null ? "formula" : "none";
 
-  const dailyImbalance = (ratePerWeekKg / 7) * KCAL_PER_KG; // <0 when losing
-  const tdee = avgIntake - dailyImbalance;
-
-  return { tdee, avgIntake, ratePerWeekKg, daysOfIntake, enoughData: true };
+  return { value, method, adaptive, formula, avgIntake, ratePerWeekKg, daysOfIntake };
 }
 
-// Recommended daily intake to hit a target weekly rate, given TDEE.
+// Recommended daily intake to hit a target weekly rate, given a TDEE value.
 export function recommendedIntake(
   tdee: number,
   targetRatePerWeek: number

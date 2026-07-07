@@ -1,7 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { toDisplay, toKg, round1, Settings, Unit } from "@/lib/stats";
+import {
+  toDisplay,
+  toKg,
+  round1,
+  Settings,
+  Unit,
+  Sex,
+  ActivityLevel,
+  ACTIVITY_LABELS,
+} from "@/lib/stats";
 
 interface SettingsSheetProps {
   open: boolean;
@@ -24,6 +33,10 @@ export default function SettingsSheet({
   const [chosenUnit, setChosenUnit] = useState<Unit>("kg");
   const [heightCm, setHeightCm] = useState("");
   const [goal, setGoal] = useState("");
+  const [sex, setSex] = useState<Sex | "">("");
+  const [birthYear, setBirthYear] = useState("");
+  const [activity, setActivity] = useState<ActivityLevel | "">("");
+  const [autoActivity, setAutoActivity] = useState(true);
 
   useEffect(() => {
     if (!open) return;
@@ -34,6 +47,10 @@ export default function SettingsSheet({
     setGoal(
       settings?.goalKg != null ? String(round1(toDisplay(settings.goalKg, unit))) : ""
     );
+    setSex(settings?.sex ?? "");
+    setBirthYear(settings?.birthYear != null ? String(settings.birthYear) : "");
+    setActivity(settings?.activityLevel ?? "");
+    setAutoActivity(settings?.autoActivity !== false);
   }, [open, settings]);
 
   if (!open) return null;
@@ -41,11 +58,16 @@ export default function SettingsSheet({
   function save() {
     const g = goal === "" ? null : parseFloat(goal.replace(",", "."));
     const h = heightCm === "" ? null : parseFloat(heightCm.replace(",", "."));
+    const by = birthYear === "" ? null : parseInt(birthYear, 10);
     onSave({
       name: name.trim(),
       unit: chosenUnit,
       heightCm: h != null && !Number.isNaN(h) ? h : null,
       goalKg: g != null && !Number.isNaN(g) ? toKg(g, chosenUnit) : null,
+      sex: sex === "" ? null : sex,
+      birthYear: by != null && !Number.isNaN(by) ? by : null,
+      activityLevel: activity === "" ? null : activity,
+      autoActivity,
     });
   }
 
@@ -119,6 +141,68 @@ export default function SettingsSheet({
             />
           </label>
         </div>
+
+        <div className="field">
+          <span>For calorie estimates (optional)</span>
+          <div className="segmented" role="tablist">
+            <button
+              className={sex === "male" ? "seg on" : "seg"}
+              onClick={() => setSex("male")}
+            >
+              Male
+            </button>
+            <button
+              className={sex === "female" ? "seg on" : "seg"}
+              onClick={() => setSex("female")}
+            >
+              Female
+            </button>
+          </div>
+        </div>
+
+        <div className="field-row">
+          <label className="field">
+            <span>Birth year</span>
+            <input
+              type="number"
+              inputMode="numeric"
+              placeholder="e.g. 1994"
+              value={birthYear}
+              onChange={(e) => setBirthYear(e.target.value)}
+              className="mono"
+            />
+          </label>
+          <label className="field">
+            <span>Activity level</span>
+            <select
+              className="select"
+              value={activity}
+              disabled={autoActivity}
+              onChange={(e) => setActivity(e.target.value as ActivityLevel | "")}
+            >
+              <option value="">Choose…</option>
+              {(Object.keys(ACTIVITY_LABELS) as ActivityLevel[]).map((k) => (
+                <option key={k} value={k}>
+                  {ACTIVITY_LABELS[k]}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <button
+          className={"toggle-row" + (autoActivity ? " on" : "")}
+          onClick={() => setAutoActivity((v) => !v)}
+          role="switch"
+          aria-checked={autoActivity}
+        >
+          <span className="toggle-track">
+            <span className="toggle-knob" />
+          </span>
+          <span className="toggle-text">
+            Set activity level automatically from my logged training
+          </span>
+        </button>
 
         <div className="field">
           <span>Your data</span>

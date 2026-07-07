@@ -6,6 +6,8 @@ import WeightChart, { ChartPoint } from "./WeightChart";
 import EntrySheet, { EntryInput } from "./EntrySheet";
 import SettingsSheet from "./SettingsSheet";
 import PhaseSheet from "./PhaseSheet";
+import WorkoutSheet from "./WorkoutSheet";
+import TrainTab from "./TrainTab";
 import {
   isFirebaseConfigured,
   watchAuth,
@@ -18,6 +20,10 @@ import {
   updateEntry,
   removeEntry,
   saveSettings,
+  watchWorkouts,
+  addWorkout,
+  updateWorkout,
+  removeWorkout,
 } from "@/lib/firebase";
 import {
   toDisplay,
@@ -45,9 +51,16 @@ import {
   Phase,
   PhaseStatus,
   TDEE,
+  ActivityLevel,
 } from "@/lib/stats";
+import {
+  Workout,
+  deriveActivityLevel,
+  avgWorkoutsPerWeek,
+  exerciseNames,
+} from "@/lib/workouts";
 
-type Tab = "overview" | "history" | "insights";
+type Tab = "overview" | "history" | "insights" | "train";
 type Theme = "dark" | "light";
 
 const RANGES = [
@@ -74,6 +87,7 @@ export default function App() {
   const [authReady, setAuthReady] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [entries, setEntries] = useState<Entry[]>([]);
+  const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
 
   const [tab, setTab] = useState<Tab>("overview");
@@ -82,6 +96,8 @@ export default function App() {
   const [editing, setEditing] = useState<Entry | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [phaseOpen, setPhaseOpen] = useState(false);
+  const [workoutOpen, setWorkoutOpen] = useState(false);
+  const [editingWorkout, setEditingWorkout] = useState<Workout | null>(null);
   const [theme, setTheme] = useState<Theme>("dark");
   const [toast, setToast] = useState("");
 
@@ -120,14 +136,17 @@ export default function App() {
   useEffect(() => {
     if (!user) {
       setEntries([]);
+      setWorkouts([]);
       setSettings(null);
       return;
     }
     const unsubE = watchEntries(user.uid, setEntries);
     const unsubS = watchSettings(user.uid, setSettings);
+    const unsubW = watchWorkouts(user.uid, setWorkouts);
     return () => {
       unsubE && unsubE();
       unsubS && unsubS();
+      unsubW && unsubW();
     };
   }, [user]);
 
@@ -181,7 +200,29 @@ export default function App() {
     [summary.current, settings?.heightCm]
   );
   const currentStreak = useMemo(() => streak(entries), [entries]);
-  const tdee = useMemo(() => estimateTDEE(entries, 14), [entries]);
+
+  // Auto-derive activity level from training frequency (opt-out via settings.autoActivity=false).
+  const autoActivity = settings?.autoActivity !== false;
+  const derivedActivity: ActivityLevel | null = useMemo(
+    () => (workouts.length ? deriveActivityLevel(workouts) : null),
+    [workouts]
+  );
+  const effectiveSettings: Settings | null = useMemo(() => {
+    if (autoActivity && derivedActivity) {
+      return { ...(settings || {}), activityLevel: derivedActivity };
+    }
+    return settings;
+  }, [settings, autoActivity, derivedActivity]);
+
+  const tdee = useMemo(
+    () => estimateTDEE(entries, effectiveSettings, 14),
+    [entries, effectiveSettings]
+  );
+  const sessionsPerWeek = useMemo(
+    () => Math.round(avgWorkoutsPerWeek(workouts, 3) * 10) / 10,
+    [workouts]
+  );
+  const knownExercises = useMemo(() => exerciseNames(workouts), [workouts]);
   const pStatus = useMemo(
     () => (phase ? phaseStatus(entries, phase, 21) : null),
     [entries, phase]
@@ -200,7 +241,7 @@ export default function App() {
       setEntryOpen(false);
       setEditing(null);
     } catch {
-      flash("Could not save — check your connection");
+      flash("Could not save - check your connection");
     }
   }
   async function handleDeleteEntry(id: string) {
@@ -251,6 +292,35 @@ export default function App() {
       flash("Phase ended");
     } catch {
       flash("Could not end phase");
+    }
+  }
+
+  async function handleSaveWorkout(w: Omit<Workout, "id" | "createdAt">) {
+    if (!user) return;
+    try {
+      if (editingWorkout && editingWorkout.id) {
+        await updateWorkout(user.uid, editingWorkout.id, w);
+        flash("Workout updated");
+      } else {
+        await addWorkout(user.uid, w);
+        flash("Workout saved");
+      }
+      setWorkoutOpen(false);
+      setEditingWorkout(null);
+    } catch {
+      flash("Could not save workout");
+    }
+  }
+
+  async function handleDeleteWorkout(id: string) {
+    if (!user) return;
+    try {
+      await removeWorkout(user.uid, id);
+      setWorkoutOpen(false);
+      setEditingWorkout(null);
+      flash("Workout deleted");
+    } catch {
+      flash("Could not delete workout");
     }
   }
 
@@ -380,6 +450,7 @@ export default function App() {
               ["overview", "Overview"],
               ["history", "History"],
               ["insights", "Insights"],
+              ["train", "Train"],
             ] as [Tab, string][]
           ).map(([k, label]) => (
             <button
@@ -450,6 +521,23 @@ export default function App() {
             onAddHeight={() => setSettingsOpen(true)}
             tdee={tdee}
             phase={phase}
+            autoActivity={autoActivity && derivedActivity != null}
+            derivedActivity={derivedActivity}
+            sessionsPerWeek={sessionsPerWeek}
+          />
+        )}
+        {tab === "train" && (
+          <TrainTab
+            workouts={workouts}
+            unit={unit}
+            onEdit={(w) => {
+              setEditingWorkout(w);
+              setWorkoutOpen(true);
+            }}
+            onLog={() => {
+              setEditingWorkout(null);
+              setWorkoutOpen(true);
+            }}
           />
         )}
       </main>
@@ -457,13 +545,18 @@ export default function App() {
       <button
         className="fab"
         onClick={() => {
-          setEditing(null);
-          setEntryOpen(true);
+          if (tab === "train") {
+            setEditingWorkout(null);
+            setWorkoutOpen(true);
+          } else {
+            setEditing(null);
+            setEntryOpen(true);
+          }
         }}
-        aria-label="Log weight"
+        aria-label={tab === "train" ? "Log workout" : "Log weight"}
       >
         <span className="fab-plus">＋</span>
-        <span className="fab-label">Log weight</span>
+        <span className="fab-label">{tab === "train" ? "Log workout" : "Log weight"}</span>
       </button>
 
       <EntrySheet
@@ -493,11 +586,23 @@ export default function App() {
         onSave={handleSavePhase}
         onEnd={handleEndPhase}
       />
+      <WorkoutSheet
+        open={workoutOpen}
+        unit={unit}
+        editing={editingWorkout}
+        knownExercises={knownExercises}
+        onClose={() => {
+          setWorkoutOpen(false);
+          setEditingWorkout(null);
+        }}
+        onSave={handleSaveWorkout}
+        onDelete={handleDeleteWorkout}
+      />
 
       <footer className="footer">
         <span>
           Signed in as {displayName}
-          {user.isAnonymous ? " (guest — data lives on this account only)" : ""}
+          {user.isAnonymous ? " (guest - data lives on this account only)" : ""}
         </span>
         <button className="linkish" onClick={() => signOut()}>
           Sign out
@@ -592,7 +697,7 @@ function Overview({
               value={
                 ratePerWeek != null
                   ? `${ratePerWeek > 0 ? "+" : ""}${ratePerWeek.toFixed(2)} ${unit}/wk`
-                  : "—"
+                  : "-"
               }
               tone={ratePerWeek != null && ratePerWeek <= 0 ? "good" : "warn"}
             />
@@ -603,7 +708,7 @@ function Overview({
                   ? `${summary.totalChange <= 0 ? "" : "+"}${(
                       round1(toDisplay(summary.totalChange, unit)) ?? 0
                     ).toFixed(1)} ${unit}`
-                  : "—"
+                  : "-"
               }
               tone={
                 summary.totalChange != null && summary.totalChange <= 0 ? "good" : "warn"
@@ -653,7 +758,7 @@ function Overview({
                 : `At your current pace you’ll reach it in about ${Math.round(
                     projection.weeks ?? 0
                   )} week${Math.round(projection.weeks ?? 0) === 1 ? "" : "s"}.`
-              : "Your recent trend is moving away from this goal — worth a look."}
+              : "Your recent trend is moving away from this goal - worth a look."}
           </p>
         </section>
       ) : hasData ? (
@@ -738,8 +843,8 @@ function PhaseCard({
       : `${targetDisplay > 0 ? "+" : ""}${targetDisplay.toFixed(2)} ${unit}/wk`;
   const meta = pStatus ? HEALTH_META[pStatus.health] : HEALTH_META["no-data"];
   const recIntake =
-    tdee.enoughData && tdee.tdee != null
-      ? recommendedIntake(tdee.tdee, phase.targetRatePerWeek)
+    tdee.value != null
+      ? recommendedIntake(tdee.value, phase.targetRatePerWeek)
       : null;
 
   return (
@@ -758,11 +863,13 @@ function PhaseCard({
         <span className={"phase-badge " + meta.cls}>{meta.label}</span>
       </div>
       {pStatus && <p className="phase-msg">{pStatus.message}</p>}
-      {recIntake != null && tdee.tdee != null ? (
+      {recIntake != null && tdee.value != null ? (
         <div className="phase-fuel">
           <div className="fuel-cell">
-            <span className="fuel-num mono">{Math.round(tdee.tdee)}</span>
-            <span className="fuel-label">maintenance kcal</span>
+            <span className="fuel-num mono">{Math.round(tdee.value)}</span>
+            <span className="fuel-label">
+              maintenance{tdee.method === "formula" ? " (est.)" : ""}
+            </span>
           </div>
           <div className="fuel-arrow">→</div>
           <div className="fuel-cell">
@@ -772,8 +879,8 @@ function PhaseCard({
         </div>
       ) : (
         <p className="phase-fuel-hint">
-          Log calories with your weigh-ins for ~5 days to unlock maintenance &amp;
-          target intake estimates.
+          Add your profile (Settings) or log calories with your weigh-ins to see
+          maintenance &amp; target intake.
         </p>
       )}
     </section>
@@ -872,6 +979,9 @@ interface InsightsProps {
   onAddHeight: () => void;
   tdee: TDEE;
   phase: Phase | null;
+  autoActivity: boolean;
+  derivedActivity: ActivityLevel | null;
+  sessionsPerWeek: number;
 }
 
 function Insights({
@@ -886,6 +996,9 @@ function Insights({
   onAddHeight,
   tdee,
   phase,
+  autoActivity,
+  derivedActivity,
+  sessionsPerWeek,
 }: InsightsProps) {
   if (summary.count < 2 || ratePerWeek == null) {
     return (
@@ -922,7 +1035,7 @@ function Insights({
     { label: "Highest", value: max.toFixed(1), unit },
     {
       label: "BMI",
-      value: bmiVal ? bmiVal.value.toFixed(1) : "—",
+      value: bmiVal ? bmiVal.value.toFixed(1) : "-",
       unit: bmiVal ? bmiVal.label : "add height",
       action: bmiVal ? undefined : onAddHeight,
     },
@@ -946,22 +1059,45 @@ function Insights({
       </section>
 
       <section className="card energy-card">
-        <span className="eyebrow">Energy · maintenance estimate</span>
-        {tdee.enoughData && tdee.tdee != null ? (
+        <span className="eyebrow">
+          Energy · {tdee.method === "adaptive" ? "measured from your data" : "estimate"}
+        </span>
+        {tdee.value != null ? (
           <>
             <div className="energy-main">
-              <span className="energy-num mono">{Math.round(tdee.tdee)}</span>
+              <span className="energy-num mono">{Math.round(tdee.value)}</span>
               <span className="energy-unit">kcal / day</span>
             </div>
             <p className="energy-note">
-              Estimated from your last {tdee.daysOfIntake} days of logged intake
-              (avg {Math.round(tdee.avgIntake ?? 0)} kcal) against your weight trend.
-              {phase && phase.type !== "maintain" && (
+              {tdee.method === "adaptive" ? (
+                <>
+                  Measured from your last {tdee.daysOfIntake} days of logged intake
+                  (avg {Math.round(tdee.avgIntake ?? 0)} kcal) against your weight
+                  trend.
+                  {tdee.formula != null && (
+                    <> Your profile formula predicts ~{Math.round(tdee.formula)} kcal.</>
+                  )}
+                </>
+              ) : (
+                <>
+                  Estimated from your profile with the Mifflin-St Jeor formula. Log
+                  calories with your weigh-ins for ~5 days and this switches to a value
+                  measured from your own results.
+                  {autoActivity && derivedActivity && (
+                    <>
+                      {" "}
+                      Activity level is set automatically from your training
+                      (~{sessionsPerWeek}×/week → {derivedActivity.replace("_", " ")}).
+                    </>
+                  )}
+                </>
+              )}
+              {phase && phase.type !== "maintain" && tdee.value != null && (
                 <>
                   {" "}
                   For your {phaseTypeLabel(phase.type).toLowerCase()}, aim for{" "}
                   <strong className="accent">
-                    {Math.round(recommendedIntake(tdee.tdee, phase.targetRatePerWeek))}{" "}
+                    {Math.round(recommendedIntake(tdee.value, phase.targetRatePerWeek))}{" "}
                     kcal/day
                   </strong>
                   .
@@ -971,9 +1107,9 @@ function Insights({
           </>
         ) : (
           <p className="energy-note">
-            Add a calorie number to your weigh-ins for about 5 days and Mercury will
-            estimate your maintenance calories — the intake that holds your weight —
-            straight from your own data. It updates as you go.
+            Add your height, sex, birth year and activity level in Settings for an
+            instant estimate - or log calories with your weigh-ins for a value measured
+            from your own data.
           </p>
         )}
       </section>
@@ -987,7 +1123,7 @@ function Insights({
             {ratePerWeek.toFixed(2)} {unit} per week
           </strong>
           . Day-to-day weight swings with water and food, so the 7-day average is the
-          honest signal — watch that line, not single mornings.
+          honest signal - watch that line, not single mornings.
           {goalDisplay != null &&
             projection?.reachable &&
             projection.weeks != null &&
@@ -1078,7 +1214,7 @@ function SetupScreen() {
           <Droplet size={30} />
           <span>Mercury</span>
         </div>
-        <h1>Almost there — connect Firebase.</h1>
+        <h1>Almost there - connect Firebase.</h1>
         <p>
           Add your Firebase web keys to <code>.env.local</code>, then restart:
         </p>

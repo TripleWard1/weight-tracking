@@ -20,7 +20,7 @@ self.addEventListener("fetch", (e) => {
   const { request } = e;
   if (request.method !== "GET") return;
   const url = new URL(request.url);
-  // Never cache Firebase / Google API traffic — always go to network.
+  // Never cache Firebase / Google API traffic - always go to network.
   if (/googleapis|firebaseio|firebase|gstatic/.test(url.host)) return;
   // Network-first for navigations, cache fallback offline.
   if (request.mode === "navigate") {

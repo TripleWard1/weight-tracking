@@ -27,6 +27,7 @@ import {
   Firestore,
 } from "firebase/firestore";
 import type { Entry, Settings } from "./stats";
+import type { Workout } from "./workouts";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -140,4 +141,41 @@ export function watchSettings(
 export async function saveSettings(uid: string, settings: Settings) {
   ensure();
   return setDoc(doc(getDb(), "users", uid), { settings }, { merge: true });
+}
+
+// ---- Workouts ----
+// users/{uid}/workouts/{workoutId} -> { ts, title, note, durationMin, exercises[] }
+
+function workoutsCol(uid: string) {
+  return collection(getDb(), "users", uid, "workouts");
+}
+
+export function watchWorkouts(
+  uid: string,
+  callback: (workouts: Workout[]) => void
+): () => void {
+  if (!ensure() || !uid) {
+    callback([]);
+    return () => {};
+  }
+  const q = query(workoutsCol(uid), orderBy("ts", "asc"));
+  return onSnapshot(q, (snap) => {
+    const rows = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Workout, "id">) }));
+    callback(rows);
+  });
+}
+
+export async function addWorkout(uid: string, workout: Omit<Workout, "id" | "createdAt">) {
+  ensure();
+  return addDoc(workoutsCol(uid), { ...workout, createdAt: serverTimestamp() });
+}
+
+export async function updateWorkout(uid: string, id: string, patch: Partial<Workout>) {
+  ensure();
+  return updateDoc(doc(getDb(), "users", uid, "workouts", id), patch);
+}
+
+export async function removeWorkout(uid: string, id: string) {
+  ensure();
+  return deleteDoc(doc(getDb(), "users", uid, "workouts", id));
 }

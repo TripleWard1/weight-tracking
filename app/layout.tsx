@@ -2,7 +2,7 @@ import "./globals.css";
 import type { Metadata, Viewport } from "next";
 
 export const metadata: Metadata = {
-  title: "Mercury — Weight Ledger",
+  title: "Mercury - Weight Ledger",
   description:
     "A precise instrument for tracking body weight over time. Trend-aware, goal-driven, synced across your devices.",
   manifest: "/manifest.json",

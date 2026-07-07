@@ -1,4 +1,4 @@
-# Mercury — Weight Ledger
+# Mercury - Weight Ledger
 
 A mobile-first weight tracker that renders equally well on phone and desktop. Log a
 number, see the honest trend. Built with **Next.js 14 (App Router)**, **Firebase**
@@ -6,12 +6,13 @@ number, see the honest trend. Built with **Next.js 14 (App Router)**, **Firebase
 
 ## Features
 
-- **Live sync** — Firestore keeps every device up to date in real time.
-- **Trend-first charts** — noisy daily readings plus a 7-day moving average (the line that actually tells the truth), with a goal reference line.
-- **Training phases** — run a cut, bulk, or maintain phase with a target weekly pace. Mercury compares your real trend to the target and tells you if you're on track, ahead, or behind, and draws your target pace on the chart.
-- **Energy / TDEE** — log calories with your weigh-ins and Mercury estimates your maintenance calories from your own weight trend, then recommends the intake to hit your phase's target pace.
-- **Goal projection** — least-squares trend estimates when you'll hit your target.
-- **Insights** — weekly rate, total change, min/max, BMI, logging streak.
+- **Live sync** - Firestore keeps every device up to date in real time.
+- **Trend-first charts** - noisy daily readings plus a 7-day moving average (the line that actually tells the truth), with a goal reference line.
+- **Training phases** - run a cut, bulk, or maintain phase with a target weekly pace. Mercury compares your real trend to the target and tells you if you're on track, ahead, or behind, and draws your target pace on the chart.
+- **Energy / TDEE (two methods)** - with a complete profile (height, sex, birth year, activity level) Mercury shows an instant maintenance estimate via the Mifflin-St Jeor formula. Once you've logged calories alongside ~5 weigh-ins, it switches automatically to an *adaptive* value measured from your own intake vs. weight trend, and shows both side by side. Logging calories is optional - the formula alone gives you a number from day one.
+- **Training log** - full workout logging (exercises → sets of reps × weight) with a Train tab: weekly consistency, per-exercise load progression (estimated 1RM), volume by muscle group, and a session history. Your training frequency can auto-set your TDEE activity level.
+- **Goal projection** - least-squares trend estimates when you'll hit your target.
+- **Insights** - weekly rate, total change, min/max, BMI, logging streak.
 - **kg / lb** everywhere, converted at the edge (data always stored in kg).
 - **Google + guest sign-in**, per-user private data.
 - **CSV export / import** (now includes calories), dark & light themes, offline shell.
@@ -21,9 +22,9 @@ number, see the honest trend. Built with **Next.js 14 (App Router)**, **Firebase
 Weight is noisy day to day, so both features lean on the trend rather than single readings:
 
 - A **phase** stores a type and a target weekly rate (e.g. −0.4 kg/week for a cut). Status compares the least-squares trend since the phase started against that target, with a tolerance band, and flags the wrong direction (e.g. gaining during a cut).
-- **TDEE** uses the standard ~7700 kcal/kg relationship: maintenance = average logged intake − the daily energy imbalance implied by your weight trend. It needs about 5 days of calorie entries before it shows, and sharpens with more. Recommended intake = TDEE + (target rate ÷ 7) × 7700.
+- **TDEE** has two modes. The **formula** mode uses Mifflin-St Jeor: BMR from weight, height, age and sex, times an activity factor - a population estimate available immediately. The **adaptive** mode (preferred once you have ~5 days of logged calories) uses the standard ~7700 kcal/kg relationship: maintenance = average logged intake − the daily energy imbalance implied by your weight trend. This reflects *your* real metabolism and activity rather than an average, and sharpens over time. Recommended intake = TDEE + (target rate ÷ 7) × 7700.
 
-These are estimates, not medical advice — they're meant to give you a data-driven starting point that you adjust as real results come in.
+These are estimates, not medical advice - they're meant to give you a data-driven starting point that you adjust as real results come in.
 
 ## Quick start (StackBlitz)
 
@@ -68,13 +69,15 @@ service cloud.firestore {
   match /databases/{database}/documents {
     match /users/{uid} {
       allow read, write: if request.auth != null && request.auth.uid == uid;
-      match /entries/{entryId} {
+      match /{document=**} {
         allow read, write: if request.auth != null && request.auth.uid == uid;
       }
     }
   }
 }
 ```
+
+The recursive `{document=**}` match covers the `entries` and `workouts` subcollections (and anything added later), so each person can only ever read and write their own data.
 
 6. When you deploy, add your Vercel domain under **Authentication → Settings →
    Authorized domains** so Google sign-in works in production.
@@ -85,13 +88,14 @@ service cloud.firestore {
 2. [vercel.com](https://vercel.com) → **Add New → Project** → import the repo.
 3. Add the six `NEXT_PUBLIC_FIREBASE_*` variables under **Settings → Environment
    Variables**.
-4. Deploy. Vercel auto-detects Next.js — no extra config needed.
+4. Deploy. Vercel auto-detects Next.js - no extra config needed.
 
 ## Data model
 
 ```
-users/{uid}                      { settings: { name, unit, heightCm, goalKg } }
-users/{uid}/entries/{entryId}    { kg, ts, bodyFat, note, createdAt }
+users/{uid}                      { settings: { name, unit, heightCm, goalKg, phases, sex, birthYear, activityLevel, autoActivity } }
+users/{uid}/entries/{entryId}    { kg, ts, bodyFat, calories, note, createdAt }
+users/{uid}/workouts/{workoutId} { ts, title, note, durationMin, exercises[], createdAt }
 ```
 
 Weights are stored in **kilograms**; the UI converts to your chosen unit for display
@@ -99,7 +103,7 @@ and back to kg on save.
 
 ## CSV format
 
-Export produces `date_iso, weight_kg, body_fat_pct, note`. Import is flexible — it
+Export produces `date_iso, weight_kg, body_fat_pct, note`. Import is flexible - it
 matches columns by name (anything containing *date/time*, *weight/kg*, *fat*, *note*),
 so exports from other trackers usually import cleanly.
 
