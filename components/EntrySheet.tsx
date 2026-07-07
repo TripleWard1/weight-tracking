@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import { toKg, toDisplay, round1, Entry, Unit } from '@/lib/stats';
+import { useEffect, useState } from "react";
+import { toKg, toDisplay, round1, Entry, Unit } from "@/lib/stats";
 
 function toLocalInputValue(ts: number): string {
   const d = new Date(ts);
@@ -34,42 +34,42 @@ export default function EntrySheet({
   onSave,
   onDelete,
 }: EntrySheetProps) {
-  const [weight, setWeight] = useState('');
+  const [weight, setWeight] = useState("");
   const [when, setWhen] = useState(toLocalInputValue(Date.now()));
-  const [bodyFat, setBodyFat] = useState('');
-  const [note, setNote] = useState('');
-  const [error, setError] = useState('');
+  const [bodyFat, setBodyFat] = useState("");
+  const [note, setNote] = useState("");
+  const [error, setError] = useState("");
 
   useEffect(() => {
     if (!open) return;
-    setError('');
+    setError("");
     if (editing) {
-      setWeight(String(round1(toDisplay(editing.kg, unit)) ?? ''));
+      setWeight(String(round1(toDisplay(editing.kg, unit)) ?? ""));
       setWhen(toLocalInputValue(editing.ts));
-      setBodyFat(editing.bodyFat != null ? String(editing.bodyFat) : '');
-      setNote(editing.note || '');
+      setBodyFat(editing.bodyFat != null ? String(editing.bodyFat) : "");
+      setNote(editing.note || "");
     } else {
-      setWeight('');
+      setWeight("");
       setWhen(toLocalInputValue(Date.now()));
-      setBodyFat('');
-      setNote('');
+      setBodyFat("");
+      setNote("");
     }
   }, [open, editing, unit]);
 
   if (!open) return null;
 
   function submit() {
-    const num = parseFloat(weight.replace(',', '.'));
+    const num = parseFloat(weight.replace(",", "."));
     if (!num || num <= 0) {
-      setError('Enter a weight above zero.');
+      setError("Enter a weight above zero.");
       return;
     }
     const ts = new Date(when).getTime();
     if (Number.isNaN(ts)) {
-      setError('Pick a valid date and time.');
+      setError("Pick a valid date and time.");
       return;
     }
-    const bf = bodyFat === '' ? null : parseFloat(bodyFat.replace(',', '.'));
+    const bf = bodyFat === "" ? null : parseFloat(bodyFat.replace(",", "."));
     onSave({
       kg: toKg(num, unit) as number,
       ts,
@@ -84,12 +84,12 @@ export default function EntrySheet({
         className="sheet"
         role="dialog"
         aria-modal="true"
-        aria-label={editing ? 'Edit reading' : 'Log weight'}
+        aria-label={editing ? "Edit reading" : "Log weight"}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="sheet-grip" />
         <div className="sheet-head">
-          <h2>{editing ? 'Edit reading' : 'Log weight'}</h2>
+          <h2>{editing ? "Edit reading" : "Log weight"}</h2>
           <button className="icon-btn" onClick={onClose} aria-label="Close">
             ✕
           </button>
@@ -155,7 +155,7 @@ export default function EntrySheet({
             </button>
           )}
           <button className="btn primary" onClick={submit}>
-            {editing ? 'Save changes' : 'Save reading'}
+            {editing ? "Save changes" : "Save reading"}
           </button>
         </div>
       </div>

@@ -79,7 +79,7 @@ export function dailySeries(entries: Entry[]): Entry[] {
   const sorted = sortByTime(entries);
   const byDay = new Map<string, Entry>();
   for (const e of sorted) byDay.set(dayKey(e.ts), e);
-  return [...byDay.values()].sort((a, b) => a.ts - b.ts);
+  return Array.from(byDay.values()).sort((a, b) => a.ts - b.ts);
 }
 
 export interface MAPoint {
