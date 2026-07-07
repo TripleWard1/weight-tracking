@@ -14,6 +14,7 @@ export interface EntryInput {
   kg: number;
   ts: number;
   bodyFat: number | null;
+  calories: number | null;
   note: string;
 }
 
@@ -37,6 +38,7 @@ export default function EntrySheet({
   const [weight, setWeight] = useState("");
   const [when, setWhen] = useState(toLocalInputValue(Date.now()));
   const [bodyFat, setBodyFat] = useState("");
+  const [calories, setCalories] = useState("");
   const [note, setNote] = useState("");
   const [error, setError] = useState("");
 
@@ -47,11 +49,13 @@ export default function EntrySheet({
       setWeight(String(round1(toDisplay(editing.kg, unit)) ?? ""));
       setWhen(toLocalInputValue(editing.ts));
       setBodyFat(editing.bodyFat != null ? String(editing.bodyFat) : "");
+      setCalories(editing.calories != null ? String(editing.calories) : "");
       setNote(editing.note || "");
     } else {
       setWeight("");
       setWhen(toLocalInputValue(Date.now()));
       setBodyFat("");
+      setCalories("");
       setNote("");
     }
   }, [open, editing, unit]);
@@ -70,10 +74,12 @@ export default function EntrySheet({
       return;
     }
     const bf = bodyFat === "" ? null : parseFloat(bodyFat.replace(",", "."));
+    const cal = calories === "" ? null : parseFloat(calories.replace(",", "."));
     onSave({
       kg: toKg(num, unit) as number,
       ts,
       bodyFat: bf != null && !Number.isNaN(bf) ? bf : null,
+      calories: cal != null && !Number.isNaN(cal) ? cal : null,
       note: note.trim(),
     });
   }
@@ -109,15 +115,16 @@ export default function EntrySheet({
           />
         </label>
 
+        <label className="field">
+          <span>Date &amp; time</span>
+          <input
+            type="datetime-local"
+            value={when}
+            onChange={(e) => setWhen(e.target.value)}
+          />
+        </label>
+
         <div className="field-row">
-          <label className="field">
-            <span>Date &amp; time</span>
-            <input
-              type="datetime-local"
-              value={when}
-              onChange={(e) => setWhen(e.target.value)}
-            />
-          </label>
           <label className="field">
             <span>Body fat % (optional)</span>
             <input
@@ -127,6 +134,18 @@ export default function EntrySheet({
               placeholder="—"
               value={bodyFat}
               onChange={(e) => setBodyFat(e.target.value)}
+              className="mono"
+            />
+          </label>
+          <label className="field">
+            <span>Calories today (optional)</span>
+            <input
+              type="number"
+              inputMode="numeric"
+              step="10"
+              placeholder="kcal"
+              value={calories}
+              onChange={(e) => setCalories(e.target.value)}
               className="mono"
             />
           </label>

@@ -8,11 +8,22 @@ number, see the honest trend. Built with **Next.js 14 (App Router)**, **Firebase
 
 - **Live sync** — Firestore keeps every device up to date in real time.
 - **Trend-first charts** — noisy daily readings plus a 7-day moving average (the line that actually tells the truth), with a goal reference line.
+- **Training phases** — run a cut, bulk, or maintain phase with a target weekly pace. Mercury compares your real trend to the target and tells you if you're on track, ahead, or behind, and draws your target pace on the chart.
+- **Energy / TDEE** — log calories with your weigh-ins and Mercury estimates your maintenance calories from your own weight trend, then recommends the intake to hit your phase's target pace.
 - **Goal projection** — least-squares trend estimates when you'll hit your target.
 - **Insights** — weekly rate, total change, min/max, BMI, logging streak.
 - **kg / lb** everywhere, converted at the edge (data always stored in kg).
 - **Google + guest sign-in**, per-user private data.
-- **CSV export / import**, dark & light themes, offline shell.
+- **CSV export / import** (now includes calories), dark & light themes, offline shell.
+
+## How phases & energy work
+
+Weight is noisy day to day, so both features lean on the trend rather than single readings:
+
+- A **phase** stores a type and a target weekly rate (e.g. −0.4 kg/week for a cut). Status compares the least-squares trend since the phase started against that target, with a tolerance band, and flags the wrong direction (e.g. gaining during a cut).
+- **TDEE** uses the standard ~7700 kcal/kg relationship: maintenance = average logged intake − the daily energy imbalance implied by your weight trend. It needs about 5 days of calorie entries before it shows, and sharpens with more. Recommended intake = TDEE + (target rate ÷ 7) × 7700.
+
+These are estimates, not medical advice — they're meant to give you a data-driven starting point that you adjust as real results come in.
 
 ## Quick start (StackBlitz)
 

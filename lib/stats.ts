@@ -10,7 +10,18 @@ export interface Entry {
   ts: number; // epoch ms
   note?: string;
   bodyFat?: number | null;
+  calories?: number | null; // optional kcal logged for that day
   createdAt?: unknown;
+}
+
+export type PhaseType = "cut" | "bulk" | "maintain";
+
+export interface Phase {
+  id: string;
+  type: PhaseType;
+  startTs: number;
+  targetRatePerWeek: number; // kg/week, signed (negative = losing)
+  note?: string;
 }
 
 export interface Settings {
@@ -18,6 +29,7 @@ export interface Settings {
   unit?: Unit;
   heightCm?: number | null;
   goalKg?: number | null;
+  phases?: Phase[];
 }
 
 export interface Summary {
@@ -36,6 +48,26 @@ export interface Projection {
   weeks: number | null;
   date: Date | null;
 }
+
+export interface TDEE {
+  tdee: number | null; // estimated maintenance kcal/day
+  avgIntake: number | null; // mean logged intake over the window
+  ratePerWeekKg: number; // weight trend used
+  daysOfIntake: number; // how many days had calories logged
+  enoughData: boolean;
+}
+
+export type PhaseHealth = "on-track" | "faster" | "slower" | "wrong-way" | "no-data";
+
+export interface PhaseStatus {
+  health: PhaseHealth;
+  actualRatePerWeek: number;
+  targetRatePerWeek: number;
+  message: string;
+}
+
+// ~7700 kcal per kg of body mass (Wishnofsky's rule; a rough but standard estimate).
+export const KCAL_PER_KG = 7700;
 
 export const KG_PER_LB = 0.45359237;
 
@@ -231,4 +263,138 @@ export function filterRange(entries: Entry[], range: string): Entry[] {
 export function round1(n: number | null | undefined): number | null {
   if (n == null || Number.isNaN(n)) return null;
   return Math.round(n * 10) / 10;
+}
+
+/* ---------------- Phases ---------------- */
+
+// The active phase is the most recently started one.
+export function activePhase(phases: Phase[] | undefined | null): Phase | null {
+  if (!phases || !phases.length) return null;
+  return [...phases].sort((a, b) => b.startTs - a.startTs)[0];
+}
+
+export function phaseTypeLabel(type: PhaseType): string {
+  if (type === "cut") return "Cut";
+  if (type === "bulk") return "Bulk";
+  return "Maintain";
+}
+
+// Default target rate (kg/week) suggested for a phase type. Signed.
+export function defaultPhaseRate(type: PhaseType): number {
+  if (type === "cut") return -0.4;
+  if (type === "bulk") return 0.25;
+  return 0;
+}
+
+// Compare the actual trend inside the phase against its target.
+export function phaseStatus(
+  entries: Entry[],
+  phase: Phase,
+  windowDays = 21
+): PhaseStatus {
+  const target = phase.targetRatePerWeek;
+  // Only look at readings since the phase started (capped to windowDays).
+  const sinceStart = sortByTime(entries).filter((e) => e.ts >= phase.startTs);
+  const actual = trendPerWeek(sinceStart, windowDays);
+  const daily = dailySeries(sinceStart);
+
+  if (daily.length < 2) {
+    return {
+      health: "no-data",
+      actualRatePerWeek: actual,
+      targetRatePerWeek: target,
+      message: "Log a few more readings in this phase to see how you're tracking.",
+    };
+  }
+
+  const TOL = 0.12; // kg/week tolerance band
+
+  // Maintenance: any direction near zero is fine.
+  if (phase.type === "maintain") {
+    if (Math.abs(actual) <= 0.15) {
+      return { health: "on-track", actualRatePerWeek: actual, targetRatePerWeek: target, message: "Holding steady — right where a maintenance phase should be." };
+    }
+    return {
+      health: actual > 0 ? "faster" : "slower",
+      actualRatePerWeek: actual,
+      targetRatePerWeek: target,
+      message:
+        actual > 0
+          ? "Drifting up a little. Trim intake slightly to hold your weight."
+          : "Drifting down a little. Add a little intake to hold your weight.",
+    };
+  }
+
+  // Wrong direction (e.g. gaining during a cut).
+  const cutting = phase.type === "cut";
+  const goingRightWay = cutting ? actual < 0 : actual > 0;
+  if (!goingRightWay && Math.abs(actual) > 0.05) {
+    return {
+      health: "wrong-way",
+      actualRatePerWeek: actual,
+      targetRatePerWeek: target,
+      message: cutting
+        ? "Trend is up during a cut. Worth reviewing intake this week."
+        : "Trend is down during a bulk. You may need to eat a bit more.",
+    };
+  }
+
+  const diff = actual - target; // negative = losing faster than target (for cut)
+  if (Math.abs(diff) <= TOL) {
+    return { health: "on-track", actualRatePerWeek: actual, targetRatePerWeek: target, message: "On track — your trend matches this phase's target pace." };
+  }
+
+  // For a cut, more-negative-than-target = faster; for a bulk, more-positive = faster.
+  const faster = cutting ? actual < target : actual > target;
+  return {
+    health: faster ? "faster" : "slower",
+    actualRatePerWeek: actual,
+    targetRatePerWeek: target,
+    message: faster
+      ? cutting
+        ? "Losing faster than planned. Fine short-term, but very fast loss can cost muscle — consider easing up."
+        : "Gaining faster than planned — more of this may be fat. Consider easing intake down."
+      : cutting
+        ? "Slower than your target. A small further cut in intake would nudge it along."
+        : "Slower than your target. A small bump in intake would nudge it along.",
+  };
+}
+
+/* ---------------- TDEE ---------------- */
+
+// Estimate maintenance calories from the weight trend + logged intake over a window.
+// TDEE = average intake - daily energy imbalance implied by the weight trend.
+export function estimateTDEE(entries: Entry[], windowDays = 14): TDEE {
+  const series = dailySeries(entries);
+  const latestTs = series.length ? series[series.length - 1].ts : Date.now();
+  const cutoff = latestTs - windowDays * 86400000;
+
+  const withCals = entries.filter(
+    (e) => e.ts >= cutoff && e.calories != null && !Number.isNaN(e.calories as number)
+  );
+  const daysOfIntake = new Set(withCals.map((e) => dayKey(e.ts))).size;
+
+  const ratePerWeekKg = trendPerWeek(entries, windowDays);
+
+  // Need a reasonable amount of intake data and a usable trend.
+  const enoughData = daysOfIntake >= 5;
+  if (!enoughData) {
+    return { tdee: null, avgIntake: null, ratePerWeekKg, daysOfIntake, enoughData: false };
+  }
+
+  const avgIntake =
+    withCals.reduce((s, e) => s + (e.calories as number), 0) / withCals.length;
+
+  const dailyImbalance = (ratePerWeekKg / 7) * KCAL_PER_KG; // <0 when losing
+  const tdee = avgIntake - dailyImbalance;
+
+  return { tdee, avgIntake, ratePerWeekKg, daysOfIntake, enoughData: true };
+}
+
+// Recommended daily intake to hit a target weekly rate, given TDEE.
+export function recommendedIntake(
+  tdee: number,
+  targetRatePerWeek: number
+): number {
+  return tdee + (targetRatePerWeek / 7) * KCAL_PER_KG;
 }

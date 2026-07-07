@@ -5,6 +5,7 @@ import type { User } from "firebase/auth";
 import WeightChart, { ChartPoint } from "./WeightChart";
 import EntrySheet, { EntryInput } from "./EntrySheet";
 import SettingsSheet from "./SettingsSheet";
+import PhaseSheet from "./PhaseSheet";
 import {
   isFirebaseConfigured,
   watchAuth,
@@ -30,12 +31,20 @@ import {
   filterRange,
   dailySeries,
   dayKey,
+  activePhase,
+  estimateTDEE,
+  phaseStatus,
+  recommendedIntake,
+  phaseTypeLabel,
   Entry,
   Settings,
   Summary,
   Projection,
   Bmi,
   Unit,
+  Phase,
+  PhaseStatus,
+  TDEE,
 } from "@/lib/stats";
 
 type Tab = "overview" | "history" | "insights";
@@ -72,6 +81,7 @@ export default function App() {
   const [entryOpen, setEntryOpen] = useState(false);
   const [editing, setEditing] = useState<Entry | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [phaseOpen, setPhaseOpen] = useState(false);
   const [theme, setTheme] = useState<Theme>("dark");
   const [toast, setToast] = useState("");
 
@@ -128,6 +138,15 @@ export default function App() {
 
   const summary = useMemo(() => summarize(entries), [entries]);
   const maAll = useMemo(() => movingAverage(entries, 7), [entries]);
+  const phase = useMemo(() => activePhase(settings?.phases), [settings?.phases]);
+
+  // Anchor weight (kg) for the target line: the 7-day average nearest the phase start.
+  const phaseAnchorKg = useMemo(() => {
+    if (!phase || !maAll.length) return null;
+    let best = maAll.find((m) => m.ts >= phase.startTs);
+    if (!best) best = maAll[maAll.length - 1];
+    return best.avg;
+  }, [phase, maAll]);
 
   const chartData: ChartPoint[] = useMemo(() => {
     const inRange = filterRange(entries, range);
@@ -136,13 +155,20 @@ export default function App() {
     const daily = dailySeries(inRange);
     return daily.map((d) => {
       const m = byDay.get(dayKey(d.ts));
+      let target: number | null = null;
+      if (phase && phaseAnchorKg != null && d.ts >= phase.startTs) {
+        const weeks = (d.ts - phase.startTs) / (7 * 86400000);
+        const targetKg = phaseAnchorKg + phase.targetRatePerWeek * weeks;
+        target = round1(toDisplay(targetKg, unit));
+      }
       return {
         t: d.ts,
         actual: round1(toDisplay(d.kg, unit)),
         avg: m ? round1(toDisplay(m.avg, unit)) : null,
+        target,
       };
     });
-  }, [entries, maAll, range, unit]);
+  }, [entries, maAll, range, unit, phase, phaseAnchorKg]);
 
   const ratePerWeekKg = useMemo(() => trendPerWeek(entries, 30), [entries]);
   const goalKg = settings?.goalKg ?? null;
@@ -155,6 +181,11 @@ export default function App() {
     [summary.current, settings?.heightCm]
   );
   const currentStreak = useMemo(() => streak(entries), [entries]);
+  const tdee = useMemo(() => estimateTDEE(entries, 14), [entries]);
+  const pStatus = useMemo(
+    () => (phase ? phaseStatus(entries, phase, 21) : null),
+    [entries, phase]
+  );
 
   async function handleSaveEntry(entry: EntryInput) {
     if (!user) return;
@@ -194,9 +225,38 @@ export default function App() {
     }
   }
 
+  async function handleSavePhase(next: Phase) {
+    if (!user) return;
+    try {
+      const existing = settings?.phases || [];
+      const idx = existing.findIndex((p) => p.id === next.id);
+      const phases =
+        idx >= 0
+          ? existing.map((p) => (p.id === next.id ? next : p))
+          : [...existing, next];
+      await saveSettings(user.uid, { ...(settings || {}), phases });
+      setPhaseOpen(false);
+      flash(idx >= 0 ? "Phase updated" : `${phaseTypeLabel(next.type)} phase started`);
+    } catch {
+      flash("Could not save phase");
+    }
+  }
+
+  async function handleEndPhase() {
+    if (!user || !phase) return;
+    try {
+      const phases = (settings?.phases || []).filter((p) => p.id !== phase.id);
+      await saveSettings(user.uid, { ...(settings || {}), phases });
+      setPhaseOpen(false);
+      flash("Phase ended");
+    } catch {
+      flash("Could not end phase");
+    }
+  }
+
   function exportCsv() {
     const rows: (string | number)[][] = [
-      ["date_iso", "weight_kg", "body_fat_pct", "note"],
+      ["date_iso", "weight_kg", "body_fat_pct", "calories", "note"],
     ];
     [...entries]
       .sort((a, b) => a.ts - b.ts)
@@ -205,6 +265,7 @@ export default function App() {
           new Date(e.ts).toISOString(),
           e.kg,
           e.bodyFat ?? "",
+          e.calories ?? "",
           (e.note || "").replace(/"/g, '""'),
         ]);
       });
@@ -250,6 +311,7 @@ export default function App() {
     const idxDate = header.findIndex((h) => /date|time/.test(h));
     const idxKg = header.findIndex((h) => /kg|weight/.test(h));
     const idxBf = header.findIndex((h) => /fat/.test(h));
+    const idxCal = header.findIndex((h) => /cal|kcal|energy/.test(h));
     const idxNote = header.findIndex((h) => /note/.test(h));
     for (let i = 1; i < lines.length; i++) {
       const f = parseLine(lines[i]);
@@ -260,6 +322,7 @@ export default function App() {
         ts,
         kg,
         bodyFat: idxBf >= 0 && f[idxBf] ? parseFloat(f[idxBf]) : null,
+        calories: idxCal >= 0 && f[idxCal] ? parseFloat(f[idxCal]) : null,
         note: idxNote >= 0 ? f[idxNote] || "" : "",
       });
     }
@@ -358,6 +421,10 @@ export default function App() {
             setRange={setRange}
             streakDays={currentStreak}
             onSetGoal={() => setSettingsOpen(true)}
+            phase={phase}
+            pStatus={pStatus}
+            tdee={tdee}
+            onManagePhase={() => setPhaseOpen(true)}
           />
         )}
         {tab === "history" && (
@@ -381,6 +448,8 @@ export default function App() {
             streakDays={currentStreak}
             heightSet={settings?.heightCm != null}
             onAddHeight={() => setSettingsOpen(true)}
+            tdee={tdee}
+            phase={phase}
           />
         )}
       </main>
@@ -416,6 +485,14 @@ export default function App() {
         onExport={exportCsv}
         onImportFile={importCsv}
       />
+      <PhaseSheet
+        open={phaseOpen}
+        unit={unit}
+        active={phase}
+        onClose={() => setPhaseOpen(false)}
+        onSave={handleSavePhase}
+        onEnd={handleEndPhase}
+      />
 
       <footer className="footer">
         <span>
@@ -447,6 +524,10 @@ interface OverviewProps {
   setRange: (r: string) => void;
   streakDays: number;
   onSetGoal: () => void;
+  phase: Phase | null;
+  pStatus: PhaseStatus | null;
+  tdee: TDEE;
+  onManagePhase: () => void;
 }
 
 function Overview({
@@ -463,6 +544,10 @@ function Overview({
   setRange,
   streakDays,
   onSetGoal,
+  phase,
+  pStatus,
+  tdee,
+  onManagePhase,
 }: OverviewProps) {
   const hasData = summary.count > 0;
   const goalPct = useMemo(() => {
@@ -528,6 +613,16 @@ function Overview({
           </div>
         )}
       </section>
+
+      {hasData && (
+        <PhaseCard
+          phase={phase}
+          pStatus={pStatus}
+          tdee={tdee}
+          unit={unit}
+          onManagePhase={onManagePhase}
+        />
+      )}
 
       {goalDisplay != null && hasData ? (
         <section className="card goal">
@@ -595,9 +690,93 @@ function Overview({
               <i className="dash warn" /> Goal
             </span>
           )}
+          {phase != null && (
+            <span>
+              <i className="dash muted" /> Target pace
+            </span>
+          )}
         </div>
       </section>
     </div>
+  );
+}
+
+/* ---------------- Phase / Coach card ---------------- */
+const HEALTH_META: Record<string, { label: string; cls: string }> = {
+  "on-track": { label: "On track", cls: "good" },
+  faster: { label: "Ahead of pace", cls: "warn" },
+  slower: { label: "Behind pace", cls: "muted" },
+  "wrong-way": { label: "Off track", cls: "warn" },
+  "no-data": { label: "Gathering data", cls: "muted" },
+};
+
+function PhaseCard({
+  phase,
+  pStatus,
+  tdee,
+  unit,
+  onManagePhase,
+}: {
+  phase: Phase | null;
+  pStatus: PhaseStatus | null;
+  tdee: TDEE;
+  unit: Unit;
+  onManagePhase: () => void;
+}) {
+  if (!phase) {
+    return (
+      <button className="card set-goal" onClick={onManagePhase}>
+        <span>＋ Start a cut, bulk, or maintain phase</span>
+      </button>
+    );
+  }
+
+  const targetDisplay = round1(toDisplay(phase.targetRatePerWeek, unit)) ?? 0;
+  const targetText =
+    phase.type === "maintain"
+      ? "Hold"
+      : `${targetDisplay > 0 ? "+" : ""}${targetDisplay.toFixed(2)} ${unit}/wk`;
+  const meta = pStatus ? HEALTH_META[pStatus.health] : HEALTH_META["no-data"];
+  const recIntake =
+    tdee.enoughData && tdee.tdee != null
+      ? recommendedIntake(tdee.tdee, phase.targetRatePerWeek)
+      : null;
+
+  return (
+    <section className="card phase-card">
+      <div className="phase-card-head">
+        <span className="eyebrow">Phase · {phaseTypeLabel(phase.type)}</span>
+        <button className="linkish" onClick={onManagePhase}>
+          Manage
+        </button>
+      </div>
+      <div className="phase-target-row">
+        <div className="phase-target">
+          <span className="phase-big mono">{targetText}</span>
+          <span className="phase-sub">target pace</span>
+        </div>
+        <span className={"phase-badge " + meta.cls}>{meta.label}</span>
+      </div>
+      {pStatus && <p className="phase-msg">{pStatus.message}</p>}
+      {recIntake != null && tdee.tdee != null ? (
+        <div className="phase-fuel">
+          <div className="fuel-cell">
+            <span className="fuel-num mono">{Math.round(tdee.tdee)}</span>
+            <span className="fuel-label">maintenance kcal</span>
+          </div>
+          <div className="fuel-arrow">→</div>
+          <div className="fuel-cell">
+            <span className="fuel-num mono accent">{Math.round(recIntake)}</span>
+            <span className="fuel-label">to hit target</span>
+          </div>
+        </div>
+      ) : (
+        <p className="phase-fuel-hint">
+          Log calories with your weigh-ins for ~5 days to unlock maintenance &amp;
+          target intake estimates.
+        </p>
+      )}
+    </section>
   );
 }
 
@@ -691,6 +870,8 @@ interface InsightsProps {
   streakDays: number;
   heightSet: boolean;
   onAddHeight: () => void;
+  tdee: TDEE;
+  phase: Phase | null;
 }
 
 function Insights({
@@ -703,6 +884,8 @@ function Insights({
   streakDays,
   heightSet,
   onAddHeight,
+  tdee,
+  phase,
 }: InsightsProps) {
   if (summary.count < 2 || ratePerWeek == null) {
     return (
@@ -760,6 +943,39 @@ function Insights({
             <span className="tile-unit">{t.unit}</span>
           </div>
         ))}
+      </section>
+
+      <section className="card energy-card">
+        <span className="eyebrow">Energy · maintenance estimate</span>
+        {tdee.enoughData && tdee.tdee != null ? (
+          <>
+            <div className="energy-main">
+              <span className="energy-num mono">{Math.round(tdee.tdee)}</span>
+              <span className="energy-unit">kcal / day</span>
+            </div>
+            <p className="energy-note">
+              Estimated from your last {tdee.daysOfIntake} days of logged intake
+              (avg {Math.round(tdee.avgIntake ?? 0)} kcal) against your weight trend.
+              {phase && phase.type !== "maintain" && (
+                <>
+                  {" "}
+                  For your {phaseTypeLabel(phase.type).toLowerCase()}, aim for{" "}
+                  <strong className="accent">
+                    {Math.round(recommendedIntake(tdee.tdee, phase.targetRatePerWeek))}{" "}
+                    kcal/day
+                  </strong>
+                  .
+                </>
+              )}
+            </p>
+          </>
+        ) : (
+          <p className="energy-note">
+            Add a calorie number to your weigh-ins for about 5 days and Mercury will
+            estimate your maintenance calories — the intake that holds your weight —
+            straight from your own data. It updates as you go.
+          </p>
+        )}
       </section>
 
       <section className="card insight-text">

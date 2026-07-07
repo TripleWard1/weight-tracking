@@ -18,6 +18,7 @@ export interface ChartPoint {
   t: number;
   actual: number | null;
   avg: number | null;
+  target?: number | null;
 }
 
 function fmtDate(ts: number, span: number): string {
@@ -93,7 +94,7 @@ export default function WeightChart({ data, unit, goal, height = 260 }: WeightCh
 
   const span = data[data.length - 1].t - data[0].t;
   const values = data
-    .flatMap((d) => [d.actual, d.avg])
+    .flatMap((d) => [d.actual, d.avg, d.target ?? null])
     .filter((v): v is number => v != null);
   if (goal != null) values.push(goal);
   const min = Math.min(...values);
@@ -147,6 +148,16 @@ export default function WeightChart({ data, unit, goal, height = 260 }: WeightCh
           dataKey="avg"
           stroke="none"
           fill="url(#avgFill)"
+          isAnimationActive={false}
+          connectNulls
+        />
+        <Line
+          type="monotone"
+          dataKey="target"
+          stroke="var(--muted)"
+          strokeWidth={1.6}
+          strokeDasharray="2 4"
+          dot={false}
           isAnimationActive={false}
           connectNulls
         />

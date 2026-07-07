@@ -880,3 +880,175 @@ strong.warn {
     gap: 18px;
   }
 }
+
+/* ============================ Phase / Coach card ============================ */
+.phase-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.phase-target-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.phase-target {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.phase-big {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1;
+}
+.phase-sub {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.phase-badge {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.phase-badge.good {
+  color: var(--good);
+  background: color-mix(in srgb, var(--good) 14%, transparent);
+}
+.phase-badge.warn {
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 14%, transparent);
+}
+.phase-badge.muted {
+  color: var(--muted);
+  background: var(--surface-3);
+}
+.phase-msg {
+  margin: 12px 0 0;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--text-2);
+}
+.phase-fuel {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.fuel-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.fuel-num {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1;
+}
+.fuel-num.accent {
+  color: var(--accent);
+}
+.fuel-label {
+  font-size: 11px;
+  color: var(--muted);
+}
+.fuel-arrow {
+  color: var(--muted);
+  font-size: 18px;
+}
+.phase-fuel-hint {
+  margin: 14px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--muted);
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+/* ============================ Energy / TDEE card ============================ */
+.energy-main {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 8px;
+}
+.energy-num {
+  font-size: clamp(38px, 11vw, 48px);
+  font-weight: 700;
+  line-height: 0.95;
+  color: var(--text);
+}
+.energy-unit {
+  font-size: 15px;
+  color: var(--muted);
+  font-weight: 600;
+}
+.energy-note {
+  margin: 12px 0 0;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--text-2);
+}
+strong.accent,
+.energy-note strong.accent {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+/* ============================ Phase sheet ============================ */
+.phase-types {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.phase-type {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  align-items: flex-start;
+  padding: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  border-radius: 12px;
+  transition: border-color 0.15s, background 0.15s;
+}
+.phase-type strong {
+  font-size: 14px;
+  color: var(--text);
+}
+.phase-type em {
+  font-style: normal;
+  font-size: 11px;
+  color: var(--muted);
+}
+.phase-type.on {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface-2));
+}
+.phase-type.on strong {
+  color: var(--accent);
+}
+.field-hint {
+  font-size: 11.5px;
+  color: var(--muted);
+  line-height: 1.45;
+  font-weight: 400;
+}
+
+/* Legend: muted dashed line for target pace */
+.dash.muted {
+  width: 14px;
+  height: 0;
+  border-top: 2px dashed var(--muted);
+  display: inline-block;
+}
