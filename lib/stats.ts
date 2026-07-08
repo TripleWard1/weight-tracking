@@ -11,6 +11,7 @@ export interface Entry {
   note?: string;
   bodyFat?: number | null;
   calories?: number | null; // optional kcal logged for that day
+  photoUrl?: string | null; // optional progress photo (external link, e.g. imgur)
   createdAt?: unknown;
 }
 

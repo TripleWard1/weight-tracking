@@ -353,3 +353,147 @@ export function draftFromRoutine(
 export function routineSetCount(r: Routine): number {
   return r.exercises.reduce((s, ex) => s + ex.sets.length, 0);
 }
+
+/* ---------------- Personal records ---------------- */
+
+export interface ExercisePR {
+  best1RM: number;
+  best1RMTs: number;
+  bestWeight: number;
+  bestWeightReps: number;
+  bestWeightTs: number;
+}
+
+export function personalRecords(workouts: Workout[]): Map<string, ExercisePR> {
+  const prs = new Map<string, ExercisePR>();
+  for (const w of sortWorkouts(workouts)) {
+    for (const ex of w.exercises) {
+      const key = ex.name.trim().toLowerCase();
+      if (!key) continue;
+      const cur =
+        prs.get(key) ||
+        ({
+          best1RM: 0,
+          best1RMTs: w.ts,
+          bestWeight: 0,
+          bestWeightReps: 0,
+          bestWeightTs: w.ts,
+        } as ExercisePR);
+      for (const s of ex.sets) {
+        const e1 = epley1RM(s.kg || 0, s.reps || 0);
+        if (e1 > cur.best1RM) {
+          cur.best1RM = e1;
+          cur.best1RMTs = w.ts;
+        }
+        if ((s.kg || 0) > cur.bestWeight) {
+          cur.bestWeight = s.kg || 0;
+          cur.bestWeightReps = s.reps || 0;
+          cur.bestWeightTs = w.ts;
+        }
+      }
+      prs.set(key, cur);
+    }
+  }
+  return prs;
+}
+
+export interface PRHit {
+  exercise: string;
+  type: "1rm" | "weight";
+  value: number;
+  reps?: number;
+}
+
+export function workoutPRs(
+  history: Workout[],
+  workout: { ts: number; exercises: Exercise[] }
+): PRHit[] {
+  const prior = history.filter((w) => w.ts < workout.ts);
+  const priorPRs = personalRecords(prior);
+  const hits: PRHit[] = [];
+  const EPS = 0.01;
+  for (const ex of workout.exercises) {
+    const key = ex.name.trim().toLowerCase();
+    if (!key) continue;
+    const prev = priorPRs.get(key);
+    let best1 = 0;
+    let topW = 0;
+    let topWReps = 0;
+    for (const s of ex.sets) {
+      best1 = Math.max(best1, epley1RM(s.kg || 0, s.reps || 0));
+      if ((s.kg || 0) > topW) {
+        topW = s.kg || 0;
+        topWReps = s.reps || 0;
+      }
+    }
+    if (best1 > (prev?.best1RM ?? 0) + EPS) {
+      hits.push({ exercise: ex.name.trim(), type: "1rm", value: best1 });
+    }
+    if (topW > (prev?.bestWeight ?? 0) + EPS) {
+      hits.push({ exercise: ex.name.trim(), type: "weight", value: topW, reps: topWReps });
+    }
+  }
+  return hits;
+}
+
+export interface SessionEntry {
+  ts: number;
+  sets: SetEntry[];
+  best1RM: number;
+  isPR: boolean;
+}
+export function exerciseSessions(workouts: Workout[], name: string): SessionEntry[] {
+  const target = name.trim().toLowerCase();
+  const out: SessionEntry[] = [];
+  let runningBest = 0;
+  for (const w of sortWorkouts(workouts)) {
+    for (const ex of w.exercises) {
+      if (ex.name.trim().toLowerCase() !== target) continue;
+      const best1 = ex.sets.reduce(
+        (m, s) => Math.max(m, epley1RM(s.kg || 0, s.reps || 0)),
+        0
+      );
+      const isPR = best1 > runningBest + 0.01;
+      if (isPR) runningBest = best1;
+      out.push({ ts: w.ts, sets: ex.sets, best1RM: best1, isPR });
+    }
+  }
+  return out;
+}
+
+/* ---------------- Plate calculator ---------------- */
+
+export const KG_PLATES = [25, 20, 15, 10, 5, 2.5, 1.25];
+export const LB_PLATES = [45, 35, 25, 10, 5, 2.5];
+export const DEFAULT_BAR_KG = 20;
+export const DEFAULT_BAR_LB = 45;
+
+export interface PlateResult {
+  perSide: { plate: number; count: number }[];
+  leftover: number;
+  totalPerSide: number;
+}
+
+export function platesPerSide(
+  target: number,
+  bar: number,
+  plates: number[]
+): PlateResult {
+  const perSideTarget = (target - bar) / 2;
+  if (perSideTarget <= 0) return { perSide: [], leftover: 0, totalPerSide: 0 };
+  const sorted = [...plates].sort((a, b) => b - a);
+  let remaining = perSideTarget;
+  const perSide: { plate: number; count: number }[] = [];
+  for (const p of sorted) {
+    const count = Math.floor((remaining + 1e-9) / p);
+    if (count > 0) {
+      perSide.push({ plate: p, count });
+      remaining -= count * p;
+    }
+  }
+  return {
+    perSide,
+    leftover: Math.max(0, Math.round(remaining * 100) / 100),
+    totalPerSide: perSideTarget,
+  };
+}

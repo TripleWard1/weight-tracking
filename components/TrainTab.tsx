@@ -27,6 +27,7 @@ import {
   exerciseNames,
   exerciseProgression,
   muscleVolume,
+  personalRecords,
   MUSCLE_LABELS,
 } from "@/lib/workouts";
 
@@ -39,6 +40,8 @@ interface TrainProps {
   onStartRoutine: (r: Routine) => void;
   onEditRoutine: (r: Routine) => void;
   onNewRoutine: () => void;
+  onOpenExercise: (name: string) => void;
+  onOpenPlates: () => void;
 }
 
 function vol(kgVolume: number, unit: Unit): number {
@@ -54,6 +57,8 @@ export default function TrainTab({
   onStartRoutine,
   onEditRoutine,
   onNewRoutine,
+  onOpenExercise,
+  onOpenPlates,
 }: TrainProps) {
   const names = useMemo(() => exerciseNames(workouts), [workouts]);
   const [exercise, setExercise] = useState<string>("");
@@ -94,9 +99,14 @@ export default function TrainTab({
           at the gym and just fill in what you lift.
         </p>
       )}
-      <button className="btn ghost block" style={{ marginTop: 10 }} onClick={onLog}>
-        Start empty workout
-      </button>
+      <div className="two-btn" style={{ marginTop: 10 }}>
+        <button className="btn ghost" onClick={onLog}>
+          Start empty workout
+        </button>
+        <button className="btn ghost" onClick={onOpenPlates}>
+          🔩 Plate calculator
+        </button>
+      </div>
     </section>
   );
 
@@ -334,6 +344,32 @@ export default function TrainTab({
               </BarChart>
             </ResponsiveContainer>
           </div>
+        </section>
+      )}
+
+      {names.length > 0 && (
+        <section className="card list">
+          <span className="eyebrow" style={{ padding: "4px 8px 8px" }}>
+            Exercises · tap for detail &amp; PRs
+          </span>
+          {names.map((n) => {
+            const pr = personalRecords(workouts).get(n.trim().toLowerCase());
+            return (
+              <button key={n} className="row" onClick={() => onOpenExercise(n)}>
+                <div className="row-main">
+                  <span className="row-weight">{n}</span>
+                </div>
+                <div className="row-side">
+                  {pr && (
+                    <span className="row-delta mono">
+                      🏆 {vol(pr.best1RM, unit)} {unit}
+                    </span>
+                  )}
+                  <span className="row-bf mono">best 1RM</span>
+                </div>
+              </button>
+            );
+          })}
         </section>
       )}
 

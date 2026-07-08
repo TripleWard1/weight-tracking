@@ -15,6 +15,7 @@ export interface EntryInput {
   ts: number;
   bodyFat: number | null;
   calories: number | null;
+  photoUrl: string | null;
   note: string;
 }
 
@@ -39,6 +40,7 @@ export default function EntrySheet({
   const [when, setWhen] = useState(toLocalInputValue(Date.now()));
   const [bodyFat, setBodyFat] = useState("");
   const [calories, setCalories] = useState("");
+  const [photoUrl, setPhotoUrl] = useState("");
   const [note, setNote] = useState("");
   const [error, setError] = useState("");
 
@@ -50,12 +52,14 @@ export default function EntrySheet({
       setWhen(toLocalInputValue(editing.ts));
       setBodyFat(editing.bodyFat != null ? String(editing.bodyFat) : "");
       setCalories(editing.calories != null ? String(editing.calories) : "");
+      setPhotoUrl(editing.photoUrl || "");
       setNote(editing.note || "");
     } else {
       setWeight("");
       setWhen(toLocalInputValue(Date.now()));
       setBodyFat("");
       setCalories("");
+      setPhotoUrl("");
       setNote("");
     }
   }, [open, editing, unit]);
@@ -80,6 +84,7 @@ export default function EntrySheet({
       ts,
       bodyFat: bf != null && !Number.isNaN(bf) ? bf : null,
       calories: cal != null && !Number.isNaN(cal) ? cal : null,
+      photoUrl: photoUrl.trim() || null,
       note: note.trim(),
     });
   }
@@ -150,6 +155,28 @@ export default function EntrySheet({
             />
           </label>
         </div>
+
+        <label className="field">
+          <span>Progress photo URL (optional)</span>
+          <input
+            type="url"
+            inputMode="url"
+            placeholder="https://i.imgur.com/…"
+            value={photoUrl}
+            onChange={(e) => setPhotoUrl(e.target.value)}
+          />
+          {photoUrl.trim() !== "" && (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              className="photo-preview"
+              src={photoUrl.trim()}
+              alt="Progress preview"
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.display = "none";
+              }}
+            />
+          )}
+        </label>
 
         <label className="field">
           <span>Note (optional)</span>

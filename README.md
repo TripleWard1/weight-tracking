@@ -11,6 +11,10 @@ number, see the honest trend. Built with **Next.js 14 (App Router)**, **Firebase
 - **Training phases** - run a cut, bulk, or maintain phase with a target weekly pace. Mercury compares your real trend to the target and tells you if you're on track, ahead, or behind, and draws your target pace on the chart.
 - **Energy / TDEE (two methods)** - with a complete profile (height, sex, birth year, activity level) Mercury shows an instant maintenance estimate via the Mifflin-St Jeor formula. Once you've logged calories alongside ~5 weigh-ins, it switches automatically to an *adaptive* value measured from your own intake vs. weight trend, and shows both side by side. Logging calories is optional - the formula alone gives you a number from day one.
 - **Training log & routines** - build reusable routines (planned exercises, sets and target reps), then start one at the gym: tick off each set as you complete it (with a live progress bar and the current exercise highlighted), and each set shows what you lifted last time so you can match or beat it (progressive overload). Sessions save to a history with weekly consistency, per-exercise 1RM progression, and volume by muscle group. Training frequency can auto-set your TDEE activity level.
+- **Personal records** - automatic PR detection (estimated 1RM and heaviest set) with a celebration when you beat a best, plus a per-exercise detail view showing progression, PRs and every past session.
+- **Plate calculator** - enter a target barbell weight and see the plates to load per side (kg or lb).
+- **Weekly review** - a quick digest of the week: weight change, workouts, training volume, and TDEE.
+- **Progress photos** - attach a photo to any weigh-in by pasting an image link (e.g. imgur); thumbnails show in history and a gallery. No file upload / storage needed.
 - **Goal projection** - least-squares trend estimates when you'll hit your target.
 - **Insights** - weekly rate, total change, min/max, BMI, logging streak.
 - **kg / lb** everywhere, converted at the edge (data always stored in kg).

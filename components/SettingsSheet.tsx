@@ -177,8 +177,10 @@ export default function SettingsSheet({
             <select
               className="select"
               value={activity}
-              disabled={autoActivity}
-              onChange={(e) => setActivity(e.target.value as ActivityLevel | "")}
+              onChange={(e) => {
+                setActivity(e.target.value as ActivityLevel | "");
+                setAutoActivity(false);
+              }}
             >
               <option value="">Choose…</option>
               {(Object.keys(ACTIVITY_LABELS) as ActivityLevel[]).map((k) => (

@@ -129,7 +129,7 @@ select {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 14px 4px;
+  padding: calc(14px + env(safe-area-inset-top)) 4px 14px;
   background: color-mix(in srgb, var(--bg) 82%, transparent);
   backdrop-filter: blur(14px);
   border-bottom: 1px solid var(--line);
@@ -755,7 +755,7 @@ strong.warn {
 }
 .signin-theme {
   position: absolute;
-  top: 18px;
+  top: calc(18px + env(safe-area-inset-top));
   right: 18px;
 }
 .signin-card {
@@ -1451,4 +1451,177 @@ strong.accent,
 @keyframes finishPulse {
   0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent); }
   50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 0%, transparent); }
+}
+
+/* ============================ PRs / detail / plates / review / photos ============================ */
+
+/* Two-button row */
+.two-btn {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+@media (max-width: 420px) {
+  .two-btn { grid-template-columns: 1fr; }
+}
+
+/* PR summary in exercise detail */
+.pr-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.pr-cell {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.pr-num {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1;
+}
+.pr-label {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.pr-tag {
+  margin-left: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 16%, transparent);
+  padding: 2px 7px;
+  border-radius: 999px;
+}
+
+/* Weekly review */
+.review-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-top: 12px;
+}
+.review-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.review-num {
+  font-size: 21px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1;
+}
+.review-num.good { color: var(--good); }
+.review-num.warn { color: var(--warn); }
+.review-label {
+  font-size: 10.5px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+@media (max-width: 460px) {
+  .review-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* Plate calculator */
+.plate-result {
+  margin-top: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.plate-caption {
+  font-size: 12px;
+  color: var(--muted);
+}
+.plate-stack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  align-items: center;
+  margin: 10px 0;
+  min-height: 46px;
+}
+.plate-chip {
+  min-width: 30px;
+  height: 44px;
+  padding: 0 7px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #10141c;
+  font-family: var(--font-mono);
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.15);
+}
+.plate-lines {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+.plate-leftover {
+  margin: 10px 0 0;
+  font-size: 12.5px;
+  color: var(--warn);
+}
+
+/* Photos */
+.photo-preview {
+  margin-top: 8px;
+  width: 100%;
+  max-height: 220px;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+}
+.row-thumb {
+  width: 42px;
+  height: 42px;
+  border-radius: 9px;
+  object-fit: cover;
+  border: 1px solid var(--line);
+  flex: 0 0 auto;
+  margin-right: 10px;
+}
+.photo-gallery {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  margin-top: 12px;
+  padding-bottom: 4px;
+}
+.photo-item {
+  flex: 0 0 auto;
+  width: 116px;
+  text-decoration: none;
+}
+.photo-item img {
+  width: 116px;
+  height: 150px;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  display: block;
+}
+.photo-cap {
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+  color: var(--text);
+  margin-top: 5px;
+}
+.photo-cap em {
+  font-style: normal;
+  color: var(--muted);
+  font-size: 11px;
 }

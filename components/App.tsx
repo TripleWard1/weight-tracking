@@ -8,6 +8,8 @@ import SettingsSheet from "./SettingsSheet";
 import PhaseSheet from "./PhaseSheet";
 import WorkoutSheet from "./WorkoutSheet";
 import RoutineSheet from "./RoutineSheet";
+import ExerciseDetailSheet from "./ExerciseDetailSheet";
+import PlateCalcSheet from "./PlateCalcSheet";
 import TrainTab from "./TrainTab";
 import {
   isFirebaseConfigured,
@@ -63,8 +65,11 @@ import {
   Routine,
   Draft,
   draftFromRoutine,
+  workoutPRs,
   deriveActivityLevel,
   avgWorkoutsPerWeek,
+  sessionsThisWeek,
+  workoutsPerWeek,
   exerciseNames,
 } from "@/lib/workouts";
 
@@ -91,6 +96,12 @@ function Droplet({ size = 22 }: { size?: number }) {
   );
 }
 
+function volThisWeek(workouts: Workout[], unit: Unit): number {
+  const wk = workoutsPerWeek(workouts, 1);
+  const kg = wk.length ? wk[wk.length - 1].volume : 0;
+  return Math.round(toDisplay(kg, unit) ?? 0);
+}
+
 export default function App() {
   const [authReady, setAuthReady] = useState(false);
   const [user, setUser] = useState<User | null>(null);
@@ -110,6 +121,8 @@ export default function App() {
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [routineOpen, setRoutineOpen] = useState(false);
   const [editingRoutine, setEditingRoutine] = useState<Routine | null>(null);
+  const [detailExercise, setDetailExercise] = useState<string | null>(null);
+  const [plateOpen, setPlateOpen] = useState(false);
   const [theme, setTheme] = useState<Theme>("dark");
   const [toast, setToast] = useState("");
 
@@ -318,10 +331,19 @@ export default function App() {
         flash("Workout updated");
       } else {
         await addWorkout(user.uid, w);
-        flash("Workout saved");
+        const hits = workoutPRs(workouts, { ts: w.ts, exercises: w.exercises });
+        if (hits.length) {
+          const top = hits[0];
+          const dispVal = round1(toDisplay(top.value, unit));
+          const extra = hits.length > 1 ? ` +${hits.length - 1} more` : "";
+          flash(`🏆 New PR · ${top.exercise} ${dispVal}${unit}${extra}`);
+        } else {
+          flash("Workout saved");
+        }
       }
       setWorkoutOpen(false);
       setEditingWorkout(null);
+      setWorkoutPrefill(null);
     } catch {
       flash("Could not save workout");
     }
@@ -579,6 +601,8 @@ export default function App() {
             autoActivity={autoActivity && derivedActivity != null}
             derivedActivity={derivedActivity}
             sessionsPerWeek={sessionsPerWeek}
+            workouts={workouts}
+            entries={entries}
           />
         )}
         {tab === "train" && (
@@ -601,6 +625,8 @@ export default function App() {
               setEditingRoutine(null);
               setRoutineOpen(true);
             }}
+            onOpenExercise={(name) => setDetailExercise(name)}
+            onOpenPlates={() => setPlateOpen(true)}
           />
         )}
       </main>
@@ -675,6 +701,14 @@ export default function App() {
         onSave={handleSaveRoutine}
         onDelete={handleDeleteRoutine}
       />
+      <ExerciseDetailSheet
+        open={detailExercise != null}
+        name={detailExercise}
+        workouts={workouts}
+        unit={unit}
+        onClose={() => setDetailExercise(null)}
+      />
+      <PlateCalcSheet open={plateOpen} unit={unit} onClose={() => setPlateOpen(false)} />
 
       <footer className="footer">
         <span>
@@ -1011,6 +1045,10 @@ function History({ entries, unit, onEdit }: HistoryProps) {
     <div className="card list">
       {list.map((e) => (
         <button key={e.id} className="row" onClick={() => onEdit(e)}>
+          {e.photoUrl ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img className="row-thumb" src={e.photoUrl} alt="" loading="lazy" />
+          ) : null}
           <div className="row-main">
             <span className="row-weight mono">
               {(round1(toDisplay(e.kg, unit)) ?? 0).toFixed(1)} {unit}
@@ -1059,6 +1097,8 @@ interface InsightsProps {
   autoActivity: boolean;
   derivedActivity: ActivityLevel | null;
   sessionsPerWeek: number;
+  workouts: Workout[];
+  entries: Entry[];
 }
 
 function Insights({
@@ -1076,6 +1116,8 @@ function Insights({
   autoActivity,
   derivedActivity,
   sessionsPerWeek,
+  workouts,
+  entries,
 }: InsightsProps) {
   if (summary.count < 2 || ratePerWeek == null) {
     return (
@@ -1121,6 +1163,43 @@ function Insights({
 
   return (
     <div className="stack">
+      <section className="card review-card">
+        <span className="eyebrow">This week in review</span>
+        <div className="review-grid">
+          <div className="review-cell">
+            <span
+              className={
+                "review-num mono " +
+                (summary.last7Change != null && summary.last7Change <= 0 ? "good" : "warn")
+              }
+            >
+              {summary.last7Change != null
+                ? `${summary.last7Change <= 0 ? "" : "+"}${(
+                    round1(toDisplay(summary.last7Change, unit)) ?? 0
+                  ).toFixed(1)}`
+                : "-"}
+            </span>
+            <span className="review-label">weight ({unit})</span>
+          </div>
+          <div className="review-cell">
+            <span className="review-num mono">{sessionsThisWeek(workouts)}</span>
+            <span className="review-label">workouts</span>
+          </div>
+          <div className="review-cell">
+            <span className="review-num mono">
+              {(volThisWeek(workouts, unit)).toLocaleString()}
+            </span>
+            <span className="review-label">volume ({unit})</span>
+          </div>
+          <div className="review-cell">
+            <span className="review-num mono">
+              {tdee.value != null ? Math.round(tdee.value) : "-"}
+            </span>
+            <span className="review-label">TDEE kcal</span>
+          </div>
+        </div>
+      </section>
+
       <section className="tiles">
         {tiles.map((t) => (
           <div
@@ -1190,6 +1269,38 @@ function Insights({
           </p>
         )}
       </section>
+
+      {entries.some((e) => e.photoUrl) && (
+        <section className="card">
+          <span className="eyebrow">Progress photos</span>
+          <div className="photo-gallery">
+            {[...entries]
+              .filter((e) => e.photoUrl)
+              .sort((a, b) => b.ts - a.ts)
+              .map((e) => (
+                <a
+                  key={e.id}
+                  href={e.photoUrl as string}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="photo-item"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={e.photoUrl as string} alt="Progress" loading="lazy" />
+                  <span className="photo-cap mono">
+                    {(round1(toDisplay(e.kg, unit)) ?? 0).toFixed(1)} {unit}
+                    <em>
+                      {new Date(e.ts).toLocaleDateString(undefined, {
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </em>
+                  </span>
+                </a>
+              ))}
+          </div>
+        </section>
+      )}
 
       <section className="card insight-text">
         <span className="eyebrow">Reading of the trend</span>
