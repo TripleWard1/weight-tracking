@@ -122,7 +122,7 @@ export default function PlateCalcSheet({ open, unit, onClose }: Props) {
               </>
             ) : (
               <p className="muted-note">
-                Target is at or below the bar weight - no plates needed.
+                Target is at or below the bar weight — no plates needed.
               </p>
             )}
           </div>

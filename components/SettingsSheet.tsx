@@ -19,6 +19,7 @@ interface SettingsSheetProps {
   onSave: (settings: Settings) => void;
   onExport: () => void;
   onImportFile: (file: File) => void;
+  onExportPdf: () => void;
 }
 
 export default function SettingsSheet({
@@ -28,6 +29,7 @@ export default function SettingsSheet({
   onSave,
   onExport,
   onImportFile,
+  onExportPdf,
 }: SettingsSheetProps) {
   const [name, setName] = useState("");
   const [chosenUnit, setChosenUnit] = useState<Unit>("kg");
@@ -226,6 +228,9 @@ export default function SettingsSheet({
               />
             </label>
           </div>
+          <button className="btn ghost block" style={{ marginTop: 10 }} onClick={onExportPdf}>
+            📄 Export PDF progress report
+          </button>
         </div>
 
         <div className="sheet-actions">

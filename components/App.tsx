@@ -269,7 +269,7 @@ export default function App() {
       setEntryOpen(false);
       setEditing(null);
     } catch {
-      flash("Could not save - check your connection");
+      flash("Could not save — check your connection");
     }
   }
   async function handleDeleteEntry(id: string) {
@@ -425,6 +425,16 @@ export default function App() {
     a.click();
     URL.revokeObjectURL(url);
     flash("Exported CSV");
+  }
+
+  async function exportPdf() {
+    try {
+      flash("Building PDF…");
+      const { generateReport } = await import("@/lib/pdf");
+      generateReport(entries, workouts, settings, unit);
+    } catch {
+      flash("Could not build PDF");
+    }
   }
 
   function parseCsv(text: string): Omit<Entry, "id" | "createdAt">[] {
@@ -665,6 +675,7 @@ export default function App() {
         onSave={handleSaveSettings}
         onExport={exportCsv}
         onImportFile={importCsv}
+        onExportPdf={exportPdf}
       />
       <PhaseSheet
         open={phaseOpen}
@@ -713,7 +724,7 @@ export default function App() {
       <footer className="footer">
         <span>
           Signed in as {displayName}
-          {user.isAnonymous ? " (guest - data lives on this account only)" : ""}
+          {user.isAnonymous ? " (guest — data lives on this account only)" : ""}
         </span>
         <button className="linkish" onClick={() => signOut()}>
           Sign out
@@ -808,7 +819,7 @@ function Overview({
               value={
                 ratePerWeek != null
                   ? `${ratePerWeek > 0 ? "+" : ""}${ratePerWeek.toFixed(2)} ${unit}/wk`
-                  : "-"
+                  : "—"
               }
               tone={ratePerWeek != null && ratePerWeek <= 0 ? "good" : "warn"}
             />
@@ -819,7 +830,7 @@ function Overview({
                   ? `${summary.totalChange <= 0 ? "" : "+"}${(
                       round1(toDisplay(summary.totalChange, unit)) ?? 0
                     ).toFixed(1)} ${unit}`
-                  : "-"
+                  : "—"
               }
               tone={
                 summary.totalChange != null && summary.totalChange <= 0 ? "good" : "warn"
@@ -869,7 +880,7 @@ function Overview({
                 : `At your current pace you’ll reach it in about ${Math.round(
                     projection.weeks ?? 0
                   )} week${Math.round(projection.weeks ?? 0) === 1 ? "" : "s"}.`
-              : "Your recent trend is moving away from this goal - worth a look."}
+              : "Your recent trend is moving away from this goal — worth a look."}
           </p>
         </section>
       ) : hasData ? (
@@ -1154,7 +1165,7 @@ function Insights({
     { label: "Highest", value: max.toFixed(1), unit },
     {
       label: "BMI",
-      value: bmiVal ? bmiVal.value.toFixed(1) : "-",
+      value: bmiVal ? bmiVal.value.toFixed(1) : "—",
       unit: bmiVal ? bmiVal.label : "add height",
       action: bmiVal ? undefined : onAddHeight,
     },
@@ -1177,7 +1188,7 @@ function Insights({
                 ? `${summary.last7Change <= 0 ? "" : "+"}${(
                     round1(toDisplay(summary.last7Change, unit)) ?? 0
                   ).toFixed(1)}`
-                : "-"}
+                : "—"}
             </span>
             <span className="review-label">weight ({unit})</span>
           </div>
@@ -1193,7 +1204,7 @@ function Insights({
           </div>
           <div className="review-cell">
             <span className="review-num mono">
-              {tdee.value != null ? Math.round(tdee.value) : "-"}
+              {tdee.value != null ? Math.round(tdee.value) : "—"}
             </span>
             <span className="review-label">TDEE kcal</span>
           </div>
@@ -1264,7 +1275,7 @@ function Insights({
         ) : (
           <p className="energy-note">
             Add your height, sex, birth year and activity level in Settings for an
-            instant estimate - or log calories with your weigh-ins for a value measured
+            instant estimate — or log calories with your weigh-ins for a value measured
             from your own data.
           </p>
         )}
@@ -1311,7 +1322,7 @@ function Insights({
             {ratePerWeek.toFixed(2)} {unit} per week
           </strong>
           . Day-to-day weight swings with water and food, so the 7-day average is the
-          honest signal - watch that line, not single mornings.
+          honest signal — watch that line, not single mornings.
           {goalDisplay != null &&
             projection?.reachable &&
             projection.weeks != null &&
@@ -1402,7 +1413,7 @@ function SetupScreen() {
           <Droplet size={30} />
           <span>Mercury</span>
         </div>
-        <h1>Almost there - connect Firebase.</h1>
+        <h1>Almost there — connect Firebase.</h1>
         <p>
           Add your Firebase web keys to <code>.env.local</code>, then restart:
         </p>

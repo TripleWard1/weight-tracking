@@ -95,7 +95,7 @@ export default function TrainTab({
         </div>
       ) : (
         <p className="muted-note">
-          Create a routine to plan your exercises, sets and target reps - then start it
+          Create a routine to plan your exercises, sets and target reps — then start it
           at the gym and just fill in what you lift.
         </p>
       )}

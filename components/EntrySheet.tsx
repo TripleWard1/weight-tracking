@@ -136,7 +136,7 @@ export default function EntrySheet({
               type="number"
               inputMode="decimal"
               step="0.1"
-              placeholder="-"
+              placeholder="—"
               value={bodyFat}
               onChange={(e) => setBodyFat(e.target.value)}
               className="mono"

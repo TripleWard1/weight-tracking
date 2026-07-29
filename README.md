@@ -1,4 +1,4 @@
-# Mercury - Weight Ledger
+# Mercury — Weight Ledger
 
 A mobile-first weight tracker that renders equally well on phone and desktop. Log a
 number, see the honest trend. Built with **Next.js 14 (App Router)**, **Firebase**
@@ -6,17 +6,18 @@ number, see the honest trend. Built with **Next.js 14 (App Router)**, **Firebase
 
 ## Features
 
-- **Live sync** - Firestore keeps every device up to date in real time.
-- **Trend-first charts** - noisy daily readings plus a 7-day moving average (the line that actually tells the truth), with a goal reference line.
-- **Training phases** - run a cut, bulk, or maintain phase with a target weekly pace. Mercury compares your real trend to the target and tells you if you're on track, ahead, or behind, and draws your target pace on the chart.
-- **Energy / TDEE (two methods)** - with a complete profile (height, sex, birth year, activity level) Mercury shows an instant maintenance estimate via the Mifflin-St Jeor formula. Once you've logged calories alongside ~5 weigh-ins, it switches automatically to an *adaptive* value measured from your own intake vs. weight trend, and shows both side by side. Logging calories is optional - the formula alone gives you a number from day one.
-- **Training log & routines** - build reusable routines (planned exercises, sets and target reps), then start one at the gym: tick off each set as you complete it (with a live progress bar and the current exercise highlighted), and each set shows what you lifted last time so you can match or beat it (progressive overload). Sessions save to a history with weekly consistency, per-exercise 1RM progression, and volume by muscle group. Training frequency can auto-set your TDEE activity level.
-- **Personal records** - automatic PR detection (estimated 1RM and heaviest set) with a celebration when you beat a best, plus a per-exercise detail view showing progression, PRs and every past session.
-- **Plate calculator** - enter a target barbell weight and see the plates to load per side (kg or lb).
-- **Weekly review** - a quick digest of the week: weight change, workouts, training volume, and TDEE.
-- **Progress photos** - attach a photo to any weigh-in by pasting an image link (e.g. imgur); thumbnails show in history and a gallery. No file upload / storage needed.
-- **Goal projection** - least-squares trend estimates when you'll hit your target.
-- **Insights** - weekly rate, total change, min/max, BMI, logging streak.
+- **Live sync** — Firestore keeps every device up to date in real time.
+- **Trend-first charts** — noisy daily readings plus a 7-day moving average (the line that actually tells the truth), with a goal reference line.
+- **Training phases** — run a cut, bulk, or maintain phase with a target weekly pace. Mercury compares your real trend to the target and tells you if you're on track, ahead, or behind, and draws your target pace on the chart.
+- **Energy / TDEE (two methods)** — with a complete profile (height, sex, birth year, activity level) Mercury shows an instant maintenance estimate via the Mifflin-St Jeor formula. Once you've logged calories alongside ~5 weigh-ins, it switches automatically to an *adaptive* value measured from your own intake vs. weight trend, and shows both side by side. Logging calories is optional — the formula alone gives you a number from day one.
+- **Training log & routines** — build reusable routines (planned exercises, sets and target reps), then start one at the gym: tick off each set as you complete it (with a live progress bar and the current exercise highlighted), and each set shows what you lifted last time so you can match or beat it (progressive overload). Sessions save to a history with weekly consistency, per-exercise 1RM progression, and volume by muscle group. Training frequency can auto-set your TDEE activity level.
+- **Personal records** — automatic PR detection (estimated 1RM and heaviest set) with a celebration when you beat a best, plus a per-exercise detail view showing progression, PRs and every past session.
+- **Plate calculator** — enter a target barbell weight and see the plates to load per side (kg or lb).
+- **Weekly review** — a quick digest of the week: weight change, workouts, training volume, and TDEE.
+- **Progress photos** — attach a photo to any weigh-in by pasting an image link (e.g. imgur); thumbnails show in history and a gallery. No file upload / storage needed.
+- **PDF progress report** — export a polished PDF: weight progression chart, per-exercise progressive-overload charts, training summary, volume by muscle, and a personal-records table. (Requires `jspdf` and `jspdf-autotable`.)
+- **Goal projection** — least-squares trend estimates when you'll hit your target.
+- **Insights** — weekly rate, total change, min/max, BMI, logging streak.
 - **kg / lb** everywhere, converted at the edge (data always stored in kg).
 - **Google + guest sign-in**, per-user private data.
 - **CSV export / import** (now includes calories), dark & light themes, offline shell.
@@ -26,9 +27,9 @@ number, see the honest trend. Built with **Next.js 14 (App Router)**, **Firebase
 Weight is noisy day to day, so both features lean on the trend rather than single readings:
 
 - A **phase** stores a type and a target weekly rate (e.g. −0.4 kg/week for a cut). Status compares the least-squares trend since the phase started against that target, with a tolerance band, and flags the wrong direction (e.g. gaining during a cut).
-- **TDEE** has two modes. The **formula** mode uses Mifflin-St Jeor: BMR from weight, height, age and sex, times an activity factor - a population estimate available immediately. The **adaptive** mode (preferred once you have ~5 days of logged calories) uses the standard ~7700 kcal/kg relationship: maintenance = average logged intake − the daily energy imbalance implied by your weight trend. This reflects *your* real metabolism and activity rather than an average, and sharpens over time. Recommended intake = TDEE + (target rate ÷ 7) × 7700.
+- **TDEE** has two modes. The **formula** mode uses Mifflin-St Jeor: BMR from weight, height, age and sex, times an activity factor — a population estimate available immediately. The **adaptive** mode (preferred once you have ~5 days of logged calories) uses the standard ~7700 kcal/kg relationship: maintenance = average logged intake − the daily energy imbalance implied by your weight trend. This reflects *your* real metabolism and activity rather than an average, and sharpens over time. Recommended intake = TDEE + (target rate ÷ 7) × 7700.
 
-These are estimates, not medical advice - they're meant to give you a data-driven starting point that you adjust as real results come in.
+These are estimates, not medical advice — they're meant to give you a data-driven starting point that you adjust as real results come in.
 
 ## Quick start (StackBlitz)
 
@@ -92,7 +93,7 @@ The recursive `{document=**}` match covers the `entries` and `workouts` subcolle
 2. [vercel.com](https://vercel.com) → **Add New → Project** → import the repo.
 3. Add the six `NEXT_PUBLIC_FIREBASE_*` variables under **Settings → Environment
    Variables**.
-4. Deploy. Vercel auto-detects Next.js - no extra config needed.
+4. Deploy. Vercel auto-detects Next.js — no extra config needed.
 
 ## Data model
 
@@ -108,7 +109,7 @@ and back to kg on save.
 
 ## CSV format
 
-Export produces `date_iso, weight_kg, body_fat_pct, note`. Import is flexible - it
+Export produces `date_iso, weight_kg, body_fat_pct, note`. Import is flexible — it
 matches columns by name (anything containing *date/time*, *weight/kg*, *fat*, *note*),
 so exports from other trackers usually import cleanly.
 

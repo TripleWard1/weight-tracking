@@ -331,7 +331,7 @@ export function phaseStatus(
   // Maintenance: any direction near zero is fine.
   if (phase.type === "maintain") {
     if (Math.abs(actual) <= 0.15) {
-      return { health: "on-track", actualRatePerWeek: actual, targetRatePerWeek: target, message: "Holding steady - right where a maintenance phase should be." };
+      return { health: "on-track", actualRatePerWeek: actual, targetRatePerWeek: target, message: "Holding steady — right where a maintenance phase should be." };
     }
     return {
       health: actual > 0 ? "faster" : "slower",
@@ -360,7 +360,7 @@ export function phaseStatus(
 
   const diff = actual - target; // negative = losing faster than target (for cut)
   if (Math.abs(diff) <= TOL) {
-    return { health: "on-track", actualRatePerWeek: actual, targetRatePerWeek: target, message: "On track - your trend matches this phase's target pace." };
+    return { health: "on-track", actualRatePerWeek: actual, targetRatePerWeek: target, message: "On track — your trend matches this phase's target pace." };
   }
 
   // For a cut, more-negative-than-target = faster; for a bulk, more-positive = faster.
@@ -371,8 +371,8 @@ export function phaseStatus(
     targetRatePerWeek: target,
     message: faster
       ? cutting
-        ? "Losing faster than planned. Fine short-term, but very fast loss can cost muscle - consider easing up."
-        : "Gaining faster than planned - more of this may be fat. Consider easing intake down."
+        ? "Losing faster than planned. Fine short-term, but very fast loss can cost muscle — consider easing up."
+        : "Gaining faster than planned — more of this may be fat. Consider easing intake down."
       : cutting
         ? "Slower than your target. A small further cut in intake would nudge it along."
         : "Slower than your target. A small bump in intake would nudge it along.",
@@ -390,11 +390,11 @@ export const ACTIVITY_FACTORS: Record<ActivityLevel, number> = {
 };
 
 export const ACTIVITY_LABELS: Record<ActivityLevel, string> = {
-  sedentary: "Sedentary - little exercise",
-  light: "Light - 1–3 days/week",
-  moderate: "Moderate - 3–5 days/week",
-  active: "Active - 6–7 days/week",
-  very_active: "Very active - hard training / physical job",
+  sedentary: "Sedentary — little exercise",
+  light: "Light — 1–3 days/week",
+  moderate: "Moderate — 3–5 days/week",
+  active: "Active — 6–7 days/week",
+  very_active: "Very active — hard training / physical job",
 };
 
 // Mifflin-St Jeor basal metabolic rate. Returns kcal/day or null if inputs missing.

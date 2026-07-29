@@ -16,10 +16,10 @@
   --text: #eef1f6;
   --text-2: #b6bece;
   --muted: #7a8397;
-  --accent: #46d6c3; /* teal - your line, the brand */
+  --accent: #46d6c3; /* teal — your line, the brand */
   --accent-ink: #04241f;
-  --accent-2: #9aa2ff; /* periwinkle - the moving average */
-  --warn: #f2a95c; /* amber - gentle, never alarm-red */
+  --accent-2: #9aa2ff; /* periwinkle — the moving average */
+  --warn: #f2a95c; /* amber — gentle, never alarm-red */
   --good: #46d6c3;
   --radius: 16px;
   --radius-sm: 11px;
@@ -1624,4 +1624,15 @@ strong.accent,
   font-style: normal;
   color: var(--muted);
   font-size: 11px;
+}
+
+/* Planned-reps chip in the workout logger */
+.plan-chip {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 13%, transparent);
+  padding: 3px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
 }

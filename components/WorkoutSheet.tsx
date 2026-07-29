@@ -270,7 +270,7 @@ export default function WorkoutSheet({
               <input
                 type="number"
                 inputMode="numeric"
-                placeholder="-"
+                placeholder="—"
                 value={duration}
                 onChange={(e) => setDuration(e.target.value)}
                 className="mono"
@@ -299,6 +299,13 @@ export default function WorkoutSheet({
               : null;
             const lastLabel = performanceLabel(last, unit);
             const exDone = ex.sets.length > 0 && ex.sets.every((s) => s.done);
+            const targets = ex.sets.map((s) => s.targetReps).filter((r): r is string => !!r);
+            const planText =
+              targets.length > 0
+                ? targets.every((t) => t === targets[0])
+                  ? `${targets.length} × ${targets[0]}`
+                  : targets.join(" · ")
+                : null;
             return (
               <div
                 className={
@@ -344,6 +351,11 @@ export default function WorkoutSheet({
                       </option>
                     ))}
                   </select>
+                  {planText && (
+                    <span className="plan-chip" title="Planned reps from your routine">
+                      Plan · {planText}
+                    </span>
+                  )}
                   {lastLabel && (
                     <span className="last-perf" title="Your last session of this exercise">
                       Last: {lastLabel}
@@ -364,7 +376,7 @@ export default function WorkoutSheet({
                     const prev = last?.sets[j];
                     const prevLabel = prev
                       ? `${round1(toDisplay(prev.kg, unit)) ?? 0}×${prev.reps}`
-                      : "-";
+                      : "—";
                     return (
                       <div className={"set-row work" + (s.done ? " done" : "")} key={j}>
                         <span className="set-idx mono">{j + 1}</span>
@@ -372,7 +384,7 @@ export default function WorkoutSheet({
                         <input
                           type="number"
                           inputMode="numeric"
-                          placeholder={prev ? String(prev.reps) : "0"}
+                          placeholder={s.targetReps || (prev ? String(prev.reps) : "0")}
                           value={s.reps}
                           onChange={(e) => updateSet(i, j, "reps", e.target.value)}
                           className="mono"

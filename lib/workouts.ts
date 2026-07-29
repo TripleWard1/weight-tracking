@@ -283,6 +283,7 @@ export interface DraftSet {
   reps: string;
   weight: string;
   done: boolean;
+  targetReps?: string; // planned reps from the routine (e.g. "8-12")
 }
 export interface DraftExercise {
   name: string;
@@ -343,6 +344,7 @@ export function draftFromRoutine(
         reps: lastSet?.reps != null ? String(lastSet.reps) : "",
         weight: weightKg != null ? String(round1(toDisplay(weightKg, unit)) ?? "") : "",
         done: false,
+        targetReps: ps.reps,
       };
     });
     return { name: rx.name, muscle: rx.muscle, sets };
