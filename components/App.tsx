@@ -72,6 +72,7 @@ import {
   workoutsPerWeek,
   exerciseNames,
 } from "@/lib/workouts";
+import { TRAINING_PLAN } from "@/lib/plan";
 
 type Tab = "overview" | "history" | "insights" | "train";
 type Theme = "dark" | "light";
@@ -437,6 +438,30 @@ export default function App() {
     }
   }
 
+  async function installPlan() {
+    if (!user) return;
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm(
+        "Instalar o plano PPL? Isto apaga as tuas rotinas atuais e cria as 3 novas (Push/Pull/Legs). O histórico de treinos e os pesos NÃO são afetados."
+      )
+    )
+      return;
+    try {
+      flash("A instalar plano…");
+      for (const r of routines) {
+        if (r.id) await removeRoutine(user.uid, r.id);
+      }
+      for (const r of TRAINING_PLAN) {
+        await addRoutine(user.uid, r);
+      }
+      setSettingsOpen(false);
+      flash("Plano PPL instalado · 3 rotinas");
+    } catch {
+      flash("Não consegui instalar o plano");
+    }
+  }
+
   function parseCsv(text: string): Omit<Entry, "id" | "createdAt">[] {
     const lines = text.split(/\r?\n/).filter((l) => l.trim().length);
     if (!lines.length) return [];
@@ -676,6 +701,7 @@ export default function App() {
         onExport={exportCsv}
         onImportFile={importCsv}
         onExportPdf={exportPdf}
+        onInstallPlan={installPlan}
       />
       <PhaseSheet
         open={phaseOpen}

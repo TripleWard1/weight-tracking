@@ -20,6 +20,7 @@ interface SettingsSheetProps {
   onExport: () => void;
   onImportFile: (file: File) => void;
   onExportPdf: () => void;
+  onInstallPlan: () => void;
 }
 
 export default function SettingsSheet({
@@ -30,6 +31,7 @@ export default function SettingsSheet({
   onExport,
   onImportFile,
   onExportPdf,
+  onInstallPlan,
 }: SettingsSheetProps) {
   const [name, setName] = useState("");
   const [chosenUnit, setChosenUnit] = useState<Unit>("kg");
@@ -230,6 +232,9 @@ export default function SettingsSheet({
           </div>
           <button className="btn ghost block" style={{ marginTop: 10 }} onClick={onExportPdf}>
             📄 Export PDF progress report
+          </button>
+          <button className="btn ghost block" style={{ marginTop: 10 }} onClick={onInstallPlan}>
+            🏋 Instalar plano PPL (substitui rotinas)
           </button>
         </div>
 
