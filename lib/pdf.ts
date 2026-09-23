@@ -1,6 +1,6 @@
-// lib/pdf.ts — client-side PDF progress report (jsPDF).
-import { jsPDF } from "jspdf";
-import autoTable from "jspdf-autotable";
+// lib/pdf.ts — dependency-free progress report.
+// Builds a styled HTML document with inline SVG charts and opens the browser's
+// print dialog (choose "Save as PDF"). No external libraries required.
 import {
   Entry,
   Settings,
@@ -16,7 +16,6 @@ import {
   exerciseNames,
   exerciseProgression,
   personalRecords,
-  exerciseSessions,
   workoutVolume,
   muscleVolume,
   avgWorkoutsPerWeek,
@@ -24,33 +23,17 @@ import {
   MUSCLE_LABELS,
 } from "./workouts";
 
-const INK = "#131824";
-const MUTED = "#6a7488";
 const ACCENT = "#0fb7a4";
 const ACCENT2 = "#5b63e0";
+const INK = "#131824";
+const MUTED = "#6a7488";
 const WARN = "#d67d2c";
 const LINE = "#e2e6ee";
-const SOFT = "#f4f6f9";
 
-const PAGE_W = 595.28;
-const PAGE_H = 841.89;
-const M = 42; // margin
-
-function hexToRgb(h: string): [number, number, number] {
-  const n = parseInt(h.slice(1), 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-}
-function setFill(doc: jsPDF, hex: string) {
-  const [r, g, b] = hexToRgb(hex);
-  doc.setFillColor(r, g, b);
-}
-function setStroke(doc: jsPDF, hex: string) {
-  const [r, g, b] = hexToRgb(hex);
-  doc.setDrawColor(r, g, b);
-}
-function setText(doc: jsPDF, hex: string) {
-  const [r, g, b] = hexToRgb(hex);
-  doc.setTextColor(r, g, b);
+function esc(s: string): string {
+  return s.replace(/[&<>"]/g, (c) =>
+    c === "&" ? "&amp;" : c === "<" ? "&lt;" : c === ">" ? "&gt;" : "&quot;"
+  );
 }
 function fmtDate(ts: number): string {
   return new Date(ts).toLocaleDateString(undefined, {
@@ -70,28 +53,15 @@ interface Pt {
 interface Series {
   points: Pt[];
   color: string;
+  dash?: boolean;
   width?: number;
-  dash?: number[];
 }
 
-function drawLineChart(
-  doc: jsPDF,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  series: Series[],
-  unit: string
-) {
+function chartSVG(series: Series[], unit: string, W = 680, H = 190): string {
   const all = series.flatMap((s) => s.points);
-  if (all.length === 0) return;
-  const pad = 30;
-  const plotX = x + pad;
-  const plotY = y + 6;
-  const plotW = w - pad - 8;
-  const plotH = h - 22;
-  const plotBottom = plotY + plotH;
-
+  if (all.length < 2)
+    return `<div class="nodata">Not enough data to chart yet.</div>`;
+  const pad = { l: 40, r: 14, t: 10, b: 24 };
   const ts = all.map((p) => p.t);
   const vs = all.map((p) => p.v);
   let tMin = Math.min(...ts);
@@ -102,54 +72,32 @@ function drawLineChart(
   const vpad = Math.max(0.5, (vMax - vMin) * 0.12);
   vMin -= vpad;
   vMax += vpad;
-  if (vMax === vMin) vMax = vMin + 1;
+  if (vMax === vMin) vMax += 1;
+  const x = (t: number) => pad.l + ((t - tMin) / (tMax - tMin)) * (W - pad.l - pad.r);
+  const y = (v: number) => H - pad.b - ((v - vMin) / (vMax - vMin)) * (H - pad.t - pad.b);
 
-  const px = (t: number) => plotX + ((t - tMin) / (tMax - tMin)) * plotW;
-  const py = (v: number) => plotBottom - ((v - vMin) / (vMax - vMin)) * plotH;
-
-  // background
-  setFill(doc, SOFT);
-  doc.roundedRect(x, y, w, h, 4, 4, "F");
-
-  // gridlines + y labels
-  doc.setFontSize(7);
-  setText(doc, MUTED);
-  setStroke(doc, LINE);
-  doc.setLineWidth(0.5);
+  let grid = "";
   for (let i = 0; i <= 3; i++) {
     const v = vMin + ((vMax - vMin) * i) / 3;
-    const gy = py(v);
-    doc.line(plotX, gy, plotX + plotW, gy);
-    doc.text(`${Math.round(v)}`, plotX - 4, gy + 2, { align: "right" });
+    const gy = y(v);
+    grid += `<line x1="${pad.l}" y1="${gy}" x2="${W - pad.r}" y2="${gy}" stroke="${LINE}" stroke-width="1"/>`;
+    grid += `<text x="${pad.l - 6}" y="${gy + 3}" text-anchor="end" font-size="9" fill="${MUTED}">${Math.round(v)}</text>`;
   }
-  // x labels
-  doc.text(fmtShort(tMin), plotX, plotBottom + 12);
-  doc.text(fmtShort(tMax), plotX + plotW, plotBottom + 12, { align: "right" });
+  grid += `<text x="${pad.l}" y="${H - 6}" font-size="9" fill="${MUTED}">${fmtShort(tMin)}</text>`;
+  grid += `<text x="${W - pad.r}" y="${H - 6}" text-anchor="end" font-size="9" fill="${MUTED}">${fmtShort(tMax)}</text>`;
 
-  // series
+  let lines = "";
   for (const s of series) {
-    if (s.points.length === 0) continue;
-    setStroke(doc, s.color);
-    doc.setLineWidth(s.width ?? 1.5);
-    if (s.dash) doc.setLineDashPattern(s.dash, 0);
-    else doc.setLineDashPattern([], 0);
-    const sorted = [...s.points].sort((a, b) => a.t - b.t);
-    for (let i = 1; i < sorted.length; i++) {
-      doc.line(px(sorted[i - 1].t), py(sorted[i - 1].v), px(sorted[i].t), py(sorted[i].v));
-    }
+    const pts = [...s.points].sort((a, b) => a.t - b.t);
+    if (pts.length < 2) continue;
+    const d = pts.map((p) => `${x(p.t).toFixed(1)},${y(p.v).toFixed(1)}`).join(" ");
+    lines += `<polyline fill="none" stroke="${s.color}" stroke-width="${s.width ?? 2}" ${
+      s.dash ? 'stroke-dasharray="4 4"' : ""
+    } points="${d}"/>`;
   }
-  doc.setLineDashPattern([], 0);
-  // unit label
-  doc.setFontSize(7);
-  setText(doc, MUTED);
-  doc.text(unit, x + w - 4, y + 10, { align: "right" });
-}
-
-function footer(doc: jsPDF, page: number) {
-  setText(doc, MUTED);
-  doc.setFontSize(8);
-  doc.text("Generated by Mercury", M, PAGE_H - 20);
-  doc.text(`${page}`, PAGE_W - M, PAGE_H - 20, { align: "right" });
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet">${grid}${lines}<text x="${
+    W - pad.r
+  }" y="12" text-anchor="end" font-size="9" fill="${MUTED}">${unit}</text></svg>`;
 }
 
 export function generateReport(
@@ -158,325 +106,206 @@ export function generateReport(
   settings: Settings | null,
   unit: Unit
 ) {
-  const doc = new jsPDF({ unit: "pt", format: "a4" });
   const name = settings?.name || "Athlete";
-  let page = 1;
-
-  // ---------- Header band ----------
-  setFill(doc, INK);
-  doc.rect(0, 0, PAGE_W, 92, "F");
-  setFill(doc, ACCENT);
-  doc.circle(M + 6, 40, 7, "F");
-  setText(doc, "#ffffff");
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(20);
-  doc.text("Mercury", M + 22, 46);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(11);
-  setText(doc, "#b6bece");
-  doc.text("Progress Report", M + 22, 62);
-  doc.setFontSize(9);
-  doc.text(fmtDate(Date.now()), PAGE_W - M, 40, { align: "right" });
-  doc.text(name, PAGE_W - M, 56, { align: "right" });
-
-  let y = 118;
   const s = summarize(entries);
   const daily = dailySeries(entries);
   const firstTs = daily.length ? daily[0].ts : Date.now();
   const lastTs = daily.length ? daily[daily.length - 1].ts : Date.now();
   const weeks = Math.max(1, (lastTs - firstTs) / (7 * 86400000));
   const rate = s.totalChange != null ? s.totalChange / weeks : 0;
+  const d = (v: number | null | undefined) =>
+    v == null ? "—" : `${round1(toDisplay(v, unit))}`;
 
-  // date range
-  setText(doc, MUTED);
-  doc.setFontSize(9.5);
-  if (daily.length)
-    doc.text(`Weight data: ${fmtDate(firstTs)} — ${fmtDate(lastTs)}`, M, y);
-  y += 18;
-
-  // ---------- KPI cards ----------
-  const kpis: { label: string; value: string; color?: string }[] = [
-    {
-      label: `Current (${unit})`,
-      value: s.current != null ? `${round1(toDisplay(s.current, unit))}` : "—",
-    },
+  // KPIs
+  const kpis = [
+    { label: `Current (${unit})`, value: d(s.current) },
     {
       label: `Change (${unit})`,
-      value:
-        s.totalChange != null
-          ? `${s.totalChange <= 0 ? "" : "+"}${round1(toDisplay(s.totalChange, unit))}`
-          : "—",
+      value: s.totalChange != null ? `${s.totalChange <= 0 ? "" : "+"}${d(s.totalChange)}` : "—",
       color: s.totalChange != null && s.totalChange <= 0 ? ACCENT : WARN,
     },
     {
       label: `Rate (${unit}/wk)`,
-      value: `${rate <= 0 ? "" : "+"}${round1(toDisplay(rate, unit))}`,
+      value: `${rate <= 0 ? "" : "+"}${d(rate)}`,
       color: rate <= 0 ? ACCENT : WARN,
     },
     { label: "Workouts", value: `${workouts.length}` },
     { label: "Exercises", value: `${exerciseNames(workouts).length}` },
   ];
-  const gap = 10;
-  const cw = (PAGE_W - M * 2 - gap * (kpis.length - 1)) / kpis.length;
-  kpis.forEach((k, i) => {
-    const kx = M + i * (cw + gap);
-    setFill(doc, SOFT);
-    doc.roundedRect(kx, y, cw, 54, 5, 5, "F");
-    setText(doc, k.color || INK);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(15);
-    doc.text(k.value, kx + cw / 2, y + 26, { align: "center" });
-    setText(doc, MUTED);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(7.5);
-    doc.text(k.label.toUpperCase(), kx + cw / 2, y + 42, { align: "center" });
-  });
-  y += 74;
+  const kpiHTML = kpis
+    .map(
+      (k) =>
+        `<div class="kpi"><div class="kpi-v" style="color:${k.color || INK}">${k.value}</div><div class="kpi-l">${k.label}</div></div>`
+    )
+    .join("");
 
-  // ---------- Weight chart ----------
-  setText(doc, INK);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(12);
-  doc.text("Weight progression", M, y);
-  y += 8;
+  // Weight chart
+  let weightChart = `<div class="nodata">Not enough weight readings yet.</div>`;
   if (daily.length > 1) {
-    const actual = daily.map((d) => ({ t: d.ts, v: toDisplay(d.kg, unit) as number }));
-    const ma = movingAverage(entries, 7).map((m) => ({
-      t: m.ts,
-      v: toDisplay(m.avg, unit) as number,
-    }));
-    drawLineChart(
-      doc,
-      M,
-      y,
-      PAGE_W - M * 2,
-      170,
+    const actual = daily.map((p) => ({ t: p.ts, v: toDisplay(p.kg, unit) as number }));
+    const ma = movingAverage(entries, 7).map((m) => ({ t: m.ts, v: toDisplay(m.avg, unit) as number }));
+    weightChart = chartSVG(
       [
-        { points: actual, color: ACCENT, width: 1, dash: undefined },
-        { points: ma, color: ACCENT2, width: 2 },
+        { points: actual, color: ACCENT, width: 1.2 },
+        { points: ma, color: ACCENT2, width: 2.4 },
       ],
       unit
     );
-    y += 178;
-    // legend
-    doc.setFontSize(8);
-    setFill(doc, ACCENT);
-    doc.rect(M, y - 6, 8, 3, "F");
-    setText(doc, MUTED);
-    doc.text("daily", M + 12, y - 3);
-    setFill(doc, ACCENT2);
-    doc.rect(M + 50, y - 6, 8, 3, "F");
-    doc.text("7-day average", M + 62, y - 3);
-    y += 14;
-  } else {
-    setText(doc, MUTED);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9.5);
-    doc.text("Not enough weight readings yet.", M, y + 16);
-    y += 30;
   }
 
-  // ---------- Milestones table ----------
+  // Milestones
   const goalKg = settings?.goalKg ?? null;
-  const rows: string[][] = [
-    ["Start", s.start != null ? `${round1(toDisplay(s.start, unit))} ${unit}` : "—"],
-    ["Current", s.current != null ? `${round1(toDisplay(s.current, unit))} ${unit}` : "—"],
-    ["Lowest", s.min != null ? `${round1(toDisplay(s.min, unit))} ${unit}` : "—"],
-    ["Highest", s.max != null ? `${round1(toDisplay(s.max, unit))} ${unit}` : "—"],
-    [
-      "Total change",
-      s.totalChange != null
-        ? `${s.totalChange <= 0 ? "" : "+"}${round1(toDisplay(s.totalChange, unit))} ${unit}`
-        : "—",
-    ],
-    ["Avg rate", `${rate <= 0 ? "" : "+"}${round1(toDisplay(rate, unit))} ${unit}/week`],
+  const mRows = [
+    ["Start", `${d(s.start)} ${unit}`],
+    ["Current", `${d(s.current)} ${unit}`],
+    ["Lowest", `${d(s.min)} ${unit}`],
+    ["Highest", `${d(s.max)} ${unit}`],
+    ["Total change", s.totalChange != null ? `${s.totalChange <= 0 ? "" : "+"}${d(s.totalChange)} ${unit}` : "—"],
+    ["Avg rate", `${rate <= 0 ? "" : "+"}${d(rate)} ${unit}/week`],
   ];
-  if (goalKg != null)
-    rows.push(["Goal", `${round1(toDisplay(goalKg, unit))} ${unit}`]);
+  if (goalKg != null) mRows.push(["Goal", `${d(goalKg)} ${unit}`]);
+  const mHTML = mRows.map((r) => `<tr><td>${r[0]}</td><td class="num">${r[1]}</td></tr>`).join("");
 
-  autoTable(doc, {
-    startY: y,
-    head: [["Milestone", "Value"]],
-    body: rows,
-    theme: "grid",
-    styles: { fontSize: 9, cellPadding: 5, lineColor: hexToRgb(LINE), textColor: hexToRgb(INK) },
-    headStyles: { fillColor: hexToRgb(INK), textColor: [255, 255, 255], fontSize: 9 },
-    alternateRowStyles: { fillColor: hexToRgb(SOFT) },
-    margin: { left: M, right: M },
-    tableWidth: (PAGE_W - M * 2) / 2 - 5,
-  });
-
-  footer(doc, page);
-
-  // ---------- Progressive overload ----------
+  // Progressive overload per exercise
   const names = exerciseNames(workouts);
   const prs = personalRecords(workouts);
-
-  if (names.length) {
-    doc.addPage();
-    page++;
-    let ey = M + 6;
-    setText(doc, INK);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(15);
-    doc.text("Progressive overload", M, ey);
-    ey += 8;
-    setText(doc, MUTED);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.text("Estimated 1RM progression per exercise, oldest to latest.", M, ey + 8);
-    ey += 26;
-
-    const blockH = 150;
-    for (const nm of names) {
+  const exBlocks = names
+    .map((nm) => {
       const prog = exerciseProgression(workouts, nm);
-      if (!prog.length) continue;
-      if (ey + blockH > PAGE_H - 44) {
-        footer(doc, page);
-        doc.addPage();
-        page++;
-        ey = M + 6;
-      }
-      const pr = prs.get(nm.trim().toLowerCase());
+      if (!prog.length) return "";
       const first1 = prog[0].best1RM;
       const last1 = prog[prog.length - 1].best1RM;
       const delta = last1 - first1;
+      const pr = prs.get(nm.trim().toLowerCase());
+      const chart = chartSVG([{ points: prog.map((p) => ({ t: p.ts, v: toDisplay(p.best1RM, unit) as number })), color: ACCENT, width: 2 }], unit, 680, 150);
+      return `<div class="ex">
+        <div class="ex-head">
+          <div class="ex-name">${esc(nm)}</div>
+          <div class="ex-delta" style="color:${delta >= 0 ? ACCENT : WARN}">${delta >= 0 ? "▲" : "▼"} ${Math.abs(round1(toDisplay(delta, unit)) ?? 0)} ${unit}</div>
+        </div>
+        <div class="ex-stats">${prog.length} sessions &nbsp;•&nbsp; 1RM ${d(first1)}→${d(last1)} ${unit}${
+          pr ? ` &nbsp;•&nbsp; best ${d(pr.best1RM)} ${unit}` : ""
+        }</div>
+        ${chart}
+      </div>`;
+    })
+    .join("");
 
-      // title
-      setText(doc, INK);
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(11.5);
-      doc.text(nm, M, ey);
-      // stat line
-      setText(doc, MUTED);
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(8.5);
-      const statLine = [
-        `${prog.length} sessions`,
-        `1RM ${round1(toDisplay(first1, unit))}→${round1(toDisplay(last1, unit))} ${unit}`,
-        `${delta >= 0 ? "+" : ""}${round1(toDisplay(delta, unit))} ${unit}`,
-        pr ? `best ${round1(toDisplay(pr.best1RM, unit))} ${unit}` : "",
-      ]
-        .filter(Boolean)
-        .join("   •   ");
-      doc.text(statLine, M, ey + 13);
+  // Training summary + muscle + PR tables
+  const totalVol = workouts.reduce((a, w) => a + workoutVolume(w), 0);
+  const sumRows = [
+    ["Total workouts", `${workouts.length}`],
+    ["Avg workouts / week", `${Math.round(avgWorkoutsPerWeek(workouts, 8) * 10) / 10}`],
+    ["Current week streak", `${weekStreak(workouts)}`],
+    ["Total volume", `${Math.round(toDisplay(totalVol, unit) ?? 0).toLocaleString()} ${unit}`],
+  ]
+    .map((r) => `<tr><td>${r[0]}</td><td class="num">${r[1]}</td></tr>`)
+    .join("");
 
-      // delta badge
-      setText(doc, delta >= 0 ? ACCENT : WARN);
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(11);
-      doc.text(
-        `${delta >= 0 ? "▲" : "▼"} ${Math.abs(round1(toDisplay(delta, unit)) ?? 0)} ${unit}`,
-        PAGE_W - M,
-        ey,
-        { align: "right" }
-      );
+  const mv = muscleVolume(workouts, 3650).sort((a, b) => b.volume - a.volume);
+  const mvHTML = mv
+    .map(
+      (m) =>
+        `<tr><td>${MUSCLE_LABELS[m.muscle]}</td><td class="num">${m.sets}</td><td class="num">${Math.round(
+          toDisplay(m.volume, unit) ?? 0
+        ).toLocaleString()}</td></tr>`
+    )
+    .join("");
 
-      // chart
-      const pts = prog.map((p) => ({ t: p.ts, v: toDisplay(p.best1RM, unit) as number }));
-      drawLineChart(doc, M, ey + 20, PAGE_W - M * 2, blockH - 30, [
-        { points: pts, color: ACCENT, width: 1.6 },
-      ], unit);
-      ey += blockH + 10;
-    }
-    footer(doc, page);
+  const prHTML = names
+    .map((nm) => {
+      const pr = prs.get(nm.trim().toLowerCase());
+      if (!pr) return "";
+      return `<tr><td>${esc(nm)}</td><td class="num">${d(pr.best1RM)} ${unit}</td><td class="num">${d(pr.bestWeight)}×${pr.bestWeightReps}</td><td class="num">${fmtShort(pr.best1RMTs)}</td></tr>`;
+    })
+    .filter(Boolean)
+    .join("");
+
+  const hasTraining = workouts.length > 0;
+
+  const html = `<!doctype html><html><head><meta charset="utf-8"/>
+<title>Mercury — ${esc(name)} — Progress Report</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: ${INK}; margin: 0; padding: 0; }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 24px; }
+  .top { background: ${INK}; color: #fff; border-radius: 12px; padding: 20px 22px; display: flex; justify-content: space-between; align-items: center; }
+  .brand { display:flex; align-items:center; gap:10px; font-size: 20px; font-weight: 700; }
+  .dot { width: 13px; height: 13px; border-radius: 50%; background: ${ACCENT}; display:inline-block; }
+  .top .sub { color: #b6bece; font-size: 12px; margin-top: 3px; font-weight: 400; }
+  .top .right { text-align: right; font-size: 12px; color:#cfd5e0; }
+  h2 { font-size: 15px; margin: 26px 0 10px; }
+  .range { color: ${MUTED}; font-size: 12px; margin-top: 14px; }
+  .kpis { display: grid; grid-template-columns: repeat(5,1fr); gap: 8px; margin-top: 8px; }
+  .kpi { background: #f4f6f9; border-radius: 8px; padding: 12px 6px; text-align: center; }
+  .kpi-v { font-size: 16px; font-weight: 700; }
+  .kpi-l { font-size: 8.5px; color: ${MUTED}; text-transform: uppercase; letter-spacing: .04em; margin-top: 4px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { text-align: left; padding: 6px 8px; border: 1px solid ${LINE}; }
+  th { background: ${INK}; color:#fff; font-weight:600; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tr:nth-child(even) td { background: #f8fafc; }
+  .half { width: 60%; }
+  .legend { font-size: 11px; color: ${MUTED}; margin-top: 4px; }
+  .legend b { display:inline-block; width:10px; height:3px; vertical-align: middle; margin-right:4px; }
+  .ex { border: 1px solid ${LINE}; border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; page-break-inside: avoid; }
+  .ex-head { display:flex; justify-content: space-between; align-items:center; }
+  .ex-name { font-weight: 700; font-size: 13px; }
+  .ex-delta { font-weight: 700; font-size: 13px; }
+  .ex-stats { color: ${MUTED}; font-size: 11px; margin: 2px 0 6px; }
+  .nodata { color: ${MUTED}; font-size: 12px; padding: 10px 0; }
+  .printbar { position: sticky; top: 0; background: ${ACCENT}; color: #04241f; text-align: center; padding: 10px; font-weight: 700; cursor: pointer; }
+  @media print { .printbar { display: none; } .wrap { padding: 0; } body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } h2 { page-break-after: avoid; } }
+  @page { margin: 14mm; }
+</style></head>
+<body>
+<div class="printbar" onclick="window.print()">▼ Guardar como PDF / Imprimir</div>
+<div class="wrap">
+  <div class="top">
+    <div><div class="brand"><span class="dot"></span>Mercury</div><div class="sub">Progress Report</div></div>
+    <div class="right">${fmtDate(Date.now())}<br/>${esc(name)}</div>
+  </div>
+  ${daily.length ? `<div class="range">Weight data: ${fmtDate(firstTs)} — ${fmtDate(lastTs)}</div>` : ""}
+  <div class="kpis">${kpiHTML}</div>
+
+  <h2>Weight progression</h2>
+  ${weightChart}
+  ${daily.length > 1 ? `<div class="legend"><span><b style="background:${ACCENT}"></b>daily</span> &nbsp; <span><b style="background:${ACCENT2}"></b>7-day average</span></div>` : ""}
+
+  <h2>Milestones</h2>
+  <table class="half"><tbody>${mHTML}</tbody></table>
+
+  ${
+    hasTraining && exBlocks
+      ? `<h2>Progressive overload</h2><div class="ex-stats">Estimated 1RM progression per exercise, oldest to latest.</div>${exBlocks}`
+      : ""
   }
 
-  // ---------- Training summary ----------
-  if (workouts.length) {
-    doc.addPage();
-    page++;
-    let ty = M + 6;
-    setText(doc, INK);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(15);
-    doc.text("Training summary", M, ty);
-    ty += 22;
-
-    const totalVol = workouts.reduce((a, w) => a + workoutVolume(w), 0);
-    const sumRows: string[][] = [
-      ["Total workouts", `${workouts.length}`],
-      ["Avg workouts / week", `${Math.round(avgWorkoutsPerWeek(workouts, 8) * 10) / 10}`],
-      ["Current week streak", `${weekStreak(workouts)}`],
-      ["Total volume", `${Math.round(toDisplay(totalVol, unit) ?? 0).toLocaleString()} ${unit}`],
-    ];
-    autoTable(doc, {
-      startY: ty,
-      head: [["Metric", "Value"]],
-      body: sumRows,
-      theme: "grid",
-      styles: { fontSize: 9, cellPadding: 5, lineColor: hexToRgb(LINE), textColor: hexToRgb(INK) },
-      headStyles: { fillColor: hexToRgb(INK), textColor: [255, 255, 255] },
-      alternateRowStyles: { fillColor: hexToRgb(SOFT) },
-      margin: { left: M, right: M },
-    });
-    ty = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 24;
-
-    // Muscle volume
-    const mv = muscleVolume(workouts, 3650);
-    if (mv.length) {
-      setText(doc, INK);
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(12);
-      doc.text("Volume by muscle group", M, ty);
-      ty += 8;
-      autoTable(doc, {
-        startY: ty,
-        head: [["Muscle", "Sets", `Volume (${unit})`]],
-        body: mv
-          .sort((a, b) => b.volume - a.volume)
-          .map((m) => [
-            MUSCLE_LABELS[m.muscle],
-            `${m.sets}`,
-            `${Math.round(toDisplay(m.volume, unit) ?? 0).toLocaleString()}`,
-          ]),
-        theme: "grid",
-        styles: { fontSize: 9, cellPadding: 5, lineColor: hexToRgb(LINE), textColor: hexToRgb(INK) },
-        headStyles: { fillColor: hexToRgb(ACCENT), textColor: [255, 255, 255] },
-        alternateRowStyles: { fillColor: hexToRgb(SOFT) },
-        margin: { left: M, right: M },
-      });
-      ty = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 24;
-    }
-
-    // PR highlights
-    const prRows = names
-      .map((nm) => {
-        const pr = prs.get(nm.trim().toLowerCase());
-        if (!pr) return null;
-        return [
-          nm,
-          `${round1(toDisplay(pr.best1RM, unit))} ${unit}`,
-          `${round1(toDisplay(pr.bestWeight, unit))}×${pr.bestWeightReps}`,
-          fmtShort(pr.best1RMTs),
-        ];
-      })
-      .filter((r): r is string[] => r != null);
-    if (prRows.length) {
-      if (ty + 60 > PAGE_H - 44) {
-        footer(doc, page);
-        doc.addPage();
-        page++;
-        ty = M + 6;
-      }
-      setText(doc, INK);
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(12);
-      doc.text("Personal records", M, ty);
-      ty += 8;
-      autoTable(doc, {
-        startY: ty,
-        head: [["Exercise", "Best 1RM", "Heaviest set", "Since"]],
-        body: prRows,
-        theme: "grid",
-        styles: { fontSize: 9, cellPadding: 5, lineColor: hexToRgb(LINE), textColor: hexToRgb(INK) },
-        headStyles: { fillColor: hexToRgb(WARN), textColor: [255, 255, 255] },
-        alternateRowStyles: { fillColor: hexToRgb(SOFT) },
-        margin: { left: M, right: M },
-      });
-    }
-    footer(doc, page);
+  ${
+    hasTraining
+      ? `<h2>Training summary</h2><table class="half"><tbody>${sumRows}</tbody></table>
+         ${mvHTML ? `<h2>Volume by muscle group</h2><table><thead><tr><th>Muscle</th><th class="num">Sets</th><th class="num">Volume (${unit})</th></tr></thead><tbody>${mvHTML}</tbody></table>` : ""}
+         ${prHTML ? `<h2>Personal records</h2><table><thead><tr><th>Exercise</th><th class="num">Best 1RM</th><th class="num">Heaviest</th><th class="num">Since</th></tr></thead><tbody>${prHTML}</tbody></table>` : ""}`
+      : ""
   }
+  <div style="text-align:center;color:${MUTED};font-size:10px;margin-top:24px">Generated by Mercury</div>
+</div>
+<script>window.onload=function(){setTimeout(function(){try{window.print()}catch(e){}},400)}</script>
+</body></html>`;
 
-  doc.save(`mercury-report-${new Date().toISOString().slice(0, 10)}.pdf`);
+  const win = window.open("", "_blank");
+  if (!win) {
+    // Popup blocked → download the report as an HTML file instead.
+    const blob = new Blob([html], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `mercury-report-${new Date().toISOString().slice(0, 10)}.html`;
+    a.click();
+    URL.revokeObjectURL(url);
+    return;
+  }
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
 }

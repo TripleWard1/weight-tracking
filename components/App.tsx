@@ -430,11 +430,11 @@ export default function App() {
 
   async function exportPdf() {
     try {
-      flash("Building PDF…");
+      flash("A abrir relatório… escolhe “Guardar como PDF”");
       const { generateReport } = await import("@/lib/pdf");
       generateReport(entries, workouts, settings, unit);
     } catch {
-      flash("Could not build PDF");
+      flash("Could not build report");
     }
   }
 
@@ -443,7 +443,7 @@ export default function App() {
     if (
       typeof window !== "undefined" &&
       !window.confirm(
-        "Instalar o plano PPL? Isto apaga as tuas rotinas atuais e cria as 3 novas (Push/Pull/Legs). O histórico de treinos e os pesos NÃO são afetados."
+        "Instalar o plano Full Body? Isto apaga as tuas rotinas atuais (incluindo o PPL) e cria as 3 novas (Day A/B/C). O histórico de treinos e os pesos NÃO são afetados."
       )
     )
       return;
@@ -456,7 +456,7 @@ export default function App() {
         await addRoutine(user.uid, r);
       }
       setSettingsOpen(false);
-      flash("Plano PPL instalado · 3 rotinas");
+      flash("Plano Full Body instalado · 3 rotinas");
     } catch {
       flash("Não consegui instalar o plano");
     }

@@ -15,7 +15,7 @@ number, see the honest trend. Built with **Next.js 14 (App Router)**, **Firebase
 - **Plate calculator** — enter a target barbell weight and see the plates to load per side (kg or lb).
 - **Weekly review** — a quick digest of the week: weight change, workouts, training volume, and TDEE.
 - **Progress photos** — attach a photo to any weigh-in by pasting an image link (e.g. imgur); thumbnails show in history and a gallery. No file upload / storage needed.
-- **PDF progress report** — export a polished PDF: weight progression chart, per-exercise progressive-overload charts, training summary, volume by muscle, and a personal-records table. (Requires `jspdf` and `jspdf-autotable`.)
+- **PDF progress report** — export a polished PDF: weight progression chart, per-exercise progressive-overload charts, training summary, volume by muscle, and a personal-records table.
 - **Goal projection** — least-squares trend estimates when you'll hit your target.
 - **Insights** — weekly rate, total change, min/max, BMI, logging streak.
 - **kg / lb** everywhere, converted at the edge (data always stored in kg).
