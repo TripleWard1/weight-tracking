@@ -443,7 +443,7 @@ export default function App() {
     if (
       typeof window !== "undefined" &&
       !window.confirm(
-        "Instalar o plano Full Body? Isto apaga as tuas rotinas atuais (incluindo o PPL) e cria as 3 novas (Day A/B/C). O histórico de treinos e os pesos NÃO são afetados."
+        "Instalar o plano Full Body v5? Isto apaga TODAS as rotinas atuais (incluindo o Full Body anterior) e cria as 3 novas (Day A/B/C). O histórico de treinos e os pesos NÃO são afetados."
       )
     )
       return;
@@ -456,7 +456,7 @@ export default function App() {
         await addRoutine(user.uid, r);
       }
       setSettingsOpen(false);
-      flash("Plano Full Body instalado · 3 rotinas");
+      flash("Plano Full Body v5 instalado · 3 rotinas");
     } catch {
       flash("Não consegui instalar o plano");
     }

@@ -234,7 +234,7 @@ export default function SettingsSheet({
             📄 Export PDF progress report
           </button>
           <button className="btn ghost block" style={{ marginTop: 10 }} onClick={onInstallPlan}>
-            🏋 Instalar plano Full Body (substitui rotinas)
+            🏋 Instalar plano Full Body v5 (substitui rotinas)
           </button>
         </div>
 
